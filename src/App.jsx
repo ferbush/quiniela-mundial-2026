@@ -106,7 +106,8 @@ export default function App() {
   const updResult = async (mid,sh,sa) => {
     if(!user?.is_admin) return;
     try { await supa(`matches?id=eq.${mid}`,{method:"PATCH",headers:{...hdrs,Prefer:"return=representation"},body:JSON.stringify({score_home:parseInt(sh),score_away:parseInt(sa),is_finished:true})});
-      for(const pr of allPreds.filter(p=>p.match_id===mid)){
+      const freshPreds = await supa(`predictions?match_id=eq.${mid}`);
+      for(const pr of (freshPreds||[])){
         const pts=calcPts(pr.pred_home,pr.pred_away,parseInt(sh),parseInt(sa));
         await supa(`predictions?id=eq.${pr.id}`,{method:"PATCH",body:JSON.stringify({points_earned:pts})});
       }
