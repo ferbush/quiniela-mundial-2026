@@ -46,6 +46,7 @@ export default function App() {
   const [grp, setGrp] = useState("ALL");
   const [drafts, setDrafts] = useState({});
   const [sending, setSending] = useState(false);
+  const [showSim, setShowSim] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -125,11 +126,10 @@ export default function App() {
   const fin=matches.filter(m=>m.is_finished).length;
   const pendN=Object.entries(drafts).filter(([mid,d])=>d.home!==undefined&&d.home!==""&&d.away!==undefined&&d.away!==""&&!hasPred(parseInt(mid))).length;
 
-  // Group standings calculation
+  // Group standings calculation (real results)
   const getGroupStandings = (groupName) => {
     const groupMatches = matches.filter(m => m.group_name === groupName && m.is_finished);
     const teams = {};
-    // Get all teams in this group (from all matches, not just finished)
     matches.filter(m => m.group_name === groupName).forEach(m => {
       if (!teams[m.team_home]) teams[m.team_home] = { name: m.team_home, pj:0, g:0, e:0, p:0, gf:0, gc:0, pts:0 };
       if (!teams[m.team_away]) teams[m.team_away] = { name: m.team_away, pj:0, g:0, e:0, p:0, gf:0, gc:0, pts:0 };
@@ -142,6 +142,39 @@ export default function App() {
       else { h.e++; a.e++; h.pts += 1; a.pts += 1; }
     });
     return Object.values(teams).sort((a, b) => b.pts - a.pts || (b.gf - b.gc) - (a.gf - a.gc) || b.gf - a.gf);
+  };
+
+  // Group standings based on USER PREDICTIONS
+  const getGroupStandingsPred = (groupName) => {
+    const teams = {};
+    matches.filter(m => m.group_name === groupName).forEach(m => {
+      if (!teams[m.team_home]) teams[m.team_home] = { name: m.team_home, pj:0, g:0, e:0, p:0, gf:0, gc:0, pts:0 };
+      if (!teams[m.team_away]) teams[m.team_away] = { name: m.team_away, pj:0, g:0, e:0, p:0, gf:0, gc:0, pts:0 };
+      // Use prediction or draft for this match
+      const pred = preds.find(p => p.match_id === m.id);
+      const draft = drafts[m.id];
+      let sh = null, sa = null;
+      if (pred) { sh = pred.pred_home; sa = pred.pred_away; }
+      else if (draft && draft.home !== undefined && draft.home !== "" && draft.away !== undefined && draft.away !== "") { sh = parseInt(draft.home); sa = parseInt(draft.away); }
+      if (sh !== null && sa !== null) {
+        const h = teams[m.team_home], a = teams[m.team_away];
+        h.pj++; a.pj++; h.gf += sh; h.gc += sa; a.gf += sa; a.gc += sh;
+        if (sh > sa) { h.g++; h.pts += 3; a.p++; }
+        else if (sh < sa) { a.g++; a.pts += 3; h.p++; }
+        else { h.e++; a.e++; h.pts += 1; a.pts += 1; }
+      }
+    });
+    return Object.values(teams).sort((a, b) => b.pts - a.pts || (b.gf - b.gc) - (a.gf - a.gc) || b.gf - a.gf);
+  };
+
+  // Best third-placed teams
+  const getBestThirds = (standingsFn) => {
+    const thirds = [];
+    ["A","B","C","D","E","F","G","H","I","J","K","L"].forEach(g => {
+      const s = standingsFn(g);
+      if (s.length >= 3 && s[2].pj > 0) thirds.push({ ...s[2], group: g });
+    });
+    return thirds.sort((a, b) => b.pts - a.pts || (b.gf - b.gc) - (a.gf - a.gc) || b.gf - a.gf);
   };
 
   if(loading) return(<div style={{background:C.bg,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}}><style>{fonts}</style><div style={{textAlign:"center"}}><div style={{fontSize:48,marginBottom:16}}>⚽</div><div style={{color:C.accent,fontFamily:"Bebas Neue",fontSize:24,letterSpacing:2}}>CARGANDO...</div></div></div>);
@@ -246,6 +279,92 @@ export default function App() {
             <h3 style={{color:C.text,fontFamily:"Bebas Neue",fontSize:24,letterSpacing:1,margin:0}}>📝 MIS PREDICCIONES</h3>
             {pendN>0&&<button onClick={submitAll} disabled={sending} style={{background:C.green,color:"#fff",border:"none",borderRadius:10,padding:"8px 18px",cursor:"pointer",fontSize:13,fontWeight:600,opacity:sending?0.5:1}}>{sending?"Enviando...":`Enviar todas (${pendN}) 🔒`}</button>}
           </div>
+
+          {/* Sub-tabs: Predictions vs Simulated Table */}
+          <div style={{display:"flex",gap:8,marginBottom:16}}>
+            <button onClick={()=>setShowSim(false)} style={{background:!showSim?C.accent:C.card,color:!showSim?C.bg:C.dim,border:`1px solid ${!showSim?C.accent:C.bdr}`,borderRadius:10,padding:"8px 16px",cursor:"pointer",fontSize:13,fontWeight:600}}>📝 Mis predicciones</button>
+            <button onClick={()=>setShowSim(true)} style={{background:showSim?C.accent:C.card,color:showSim?C.bg:C.dim,border:`1px solid ${showSim?C.accent:C.bdr}`,borderRadius:10,padding:"8px 16px",cursor:"pointer",fontSize:13,fontWeight:600}}>📊 Mi tabla simulada</button>
+          </div>
+
+          {/* SIMULATED TABLE VIEW */}
+          {showSim?(<div>
+            <div style={{background:C.card,borderRadius:10,padding:"10px 14px",marginBottom:16,border:`1px solid ${C.bdr}`}}>
+              <div style={{color:C.dim,fontSize:12,lineHeight:1.6}}>📊 Así quedarían los grupos según <strong style={{color:C.accent}}>tus predicciones</strong>. Se actualiza conforme llenás resultados.</div>
+            </div>
+            {["A","B","C","D","E","F","G","H","I","J","K","L"].map(g=>{
+              const standings = getGroupStandingsPred(g);
+              const predsInGroup = matches.filter(m=>m.group_name===g).filter(m=>preds.some(p=>p.match_id===m.id)||drafts[m.id]).length;
+              return(
+                <div key={g} style={{...crd,marginBottom:16,padding:0,overflow:"hidden"}}>
+                  <div style={{background:C.blue+"18",padding:"10px 16px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <span style={{fontFamily:"Bebas Neue",fontSize:18,color:C.blue,letterSpacing:2}}>GRUPO {g}</span>
+                    <span style={{color:C.dim,fontSize:11}}>{predsInGroup}/6 predicciones</span>
+                  </div>
+                  <div style={{overflowX:"auto"}}>
+                    <table style={{width:"100%",borderCollapse:"collapse",minWidth:480}}>
+                      <thead><tr style={{borderBottom:`1px solid ${C.bdr}`}}>
+                        <th style={{...th,textAlign:"left",paddingLeft:16,width:"40%"}}>Equipo</th>
+                        <th style={th}>PJ</th><th style={th}>G</th><th style={th}>E</th><th style={th}>P</th>
+                        <th style={th}>GF</th><th style={th}>GC</th><th style={th}>DIF</th>
+                        <th style={{...th,color:C.blue}}>PTS</th>
+                      </tr></thead>
+                      <tbody>{standings.map((t,i)=>(
+                        <tr key={t.name} style={{borderBottom:`1px solid ${C.bdr}`,background:i<2?C.blue+"08":"transparent"}}>
+                          <td style={{padding:"10px 16px",color:C.text,fontSize:14,fontWeight:500}}>
+                            <span style={{display:"inline-flex",alignItems:"center",gap:8}}>
+                              {i<2&&<span style={{width:6,height:6,borderRadius:"50%",background:C.blue,display:"inline-block",flexShrink:0}}/>}
+                              {gf(t.name)} {t.name}
+                            </span>
+                          </td>
+                          <td style={td}>{t.pj}</td><td style={td}>{t.g}</td><td style={td}>{t.e}</td><td style={td}>{t.p}</td>
+                          <td style={td}>{t.gf}</td><td style={td}>{t.gc}</td>
+                          <td style={{...td,color:t.gf-t.gc>0?C.green:t.gf-t.gc<0?C.red:C.dim}}>{t.gf-t.gc>0?"+":""}{t.gf-t.gc}</td>
+                          <td style={{...td,color:C.blue,fontWeight:700,fontFamily:"Bebas Neue",fontSize:18}}>{t.pts}</td>
+                        </tr>
+                      ))}</tbody>
+                    </table>
+                  </div>
+                </div>
+              );
+            })}
+            {/* Simulated best thirds */}
+            {(()=>{const bt=getBestThirds(getGroupStandingsPred);return bt.length>0?(
+              <div style={{...crd,marginBottom:16,padding:0,overflow:"hidden"}}>
+                <div style={{background:C.accent+"18",padding:"10px 16px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <span style={{fontFamily:"Bebas Neue",fontSize:18,color:C.accent,letterSpacing:2}}>MEJORES TERCEROS</span>
+                  <span style={{color:C.dim,fontSize:11}}>Clasifican los 8 mejores</span>
+                </div>
+                <div style={{overflowX:"auto"}}>
+                  <table style={{width:"100%",borderCollapse:"collapse",minWidth:480}}>
+                    <thead><tr style={{borderBottom:`1px solid ${C.bdr}`}}>
+                      <th style={{...th,textAlign:"left",paddingLeft:16}}>Grupo</th>
+                      <th style={{...th,textAlign:"left"}}>Equipo</th>
+                      <th style={th}>PJ</th><th style={th}>G</th><th style={th}>E</th><th style={th}>P</th>
+                      <th style={th}>GF</th><th style={th}>GC</th><th style={th}>DIF</th>
+                      <th style={{...th,color:C.accent}}>PTS</th>
+                    </tr></thead>
+                    <tbody>{bt.map((t,i)=>(
+                      <tr key={t.name} style={{borderBottom:`1px solid ${C.bdr}`,background:i<8?C.accent+"08":"transparent",opacity:i>=8?0.5:1}}>
+                        <td style={{padding:"10px 16px",color:C.accent,fontSize:14,fontWeight:600}}>{t.group}</td>
+                        <td style={{padding:"10px 8px",color:C.text,fontSize:14,fontWeight:500}}>
+                          <span style={{display:"inline-flex",alignItems:"center",gap:6}}>
+                            {i<8&&<span style={{width:6,height:6,borderRadius:"50%",background:C.accent,display:"inline-block",flexShrink:0}}/>}
+                            {gf(t.name)} {t.name}
+                          </span>
+                        </td>
+                        <td style={td}>{t.pj}</td><td style={td}>{t.g}</td><td style={td}>{t.e}</td><td style={td}>{t.p}</td>
+                        <td style={td}>{t.gf}</td><td style={td}>{t.gc}</td>
+                        <td style={{...td,color:t.gf-t.gc>0?C.green:t.gf-t.gc<0?C.red:C.dim}}>{t.gf-t.gc>0?"+":""}{t.gf-t.gc}</td>
+                        <td style={{...td,color:C.accent,fontWeight:700,fontFamily:"Bebas Neue",fontSize:18}}>{t.pts}</td>
+                      </tr>
+                    ))}</tbody>
+                  </table>
+                </div>
+              </div>
+            ):null;})()}
+          </div>):(<div>
+
+          {/* NORMAL PREDICTIONS LIST */}
           <div style={{background:C.card,borderRadius:10,padding:"10px 14px",marginBottom:16,border:`1px solid ${C.bdr}`}}>
             <div style={{color:C.dim,fontSize:12,lineHeight:1.6}}>🔒 <strong style={{color:C.accent}}>Importante:</strong> Una vez enviada, la predicción NO se puede cambiar.</div>
           </div>
@@ -279,7 +398,7 @@ export default function App() {
               </div>
             );
           })}
-        </div>)}
+        </div>)}</div>)}
 
         {/* GROUPS STANDINGS */}
         {view==="groups"&&(<div>
@@ -322,10 +441,45 @@ export default function App() {
                     </tbody>
                   </table>
                 </div>
-                {groupFinished>0&&<div style={{padding:"6px 16px 10px",fontSize:11,color:C.dim}}>🟢 Clasifican los 2 primeros</div>}
+                {groupFinished>0&&<div style={{padding:"6px 16px 10px",fontSize:11,color:C.dim}}>🟢 Clasifican los 2 primeros + mejores terceros</div>}
               </div>
             );
           })}
+          {/* Best third-placed teams (real) */}
+          {(()=>{const bt=getBestThirds(getGroupStandings);return bt.length>0?(
+            <div style={{...crd,marginBottom:16,padding:0,overflow:"hidden"}}>
+              <div style={{background:C.accent+"18",padding:"10px 16px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <span style={{fontFamily:"Bebas Neue",fontSize:18,color:C.accent,letterSpacing:2}}>MEJORES TERCEROS</span>
+                <span style={{color:C.dim,fontSize:11}}>Clasifican los 8 mejores</span>
+              </div>
+              <div style={{overflowX:"auto"}}>
+                <table style={{width:"100%",borderCollapse:"collapse",minWidth:480}}>
+                  <thead><tr style={{borderBottom:`1px solid ${C.bdr}`}}>
+                    <th style={{...th,textAlign:"left",paddingLeft:16}}>Grupo</th>
+                    <th style={{...th,textAlign:"left"}}>Equipo</th>
+                    <th style={th}>PJ</th><th style={th}>G</th><th style={th}>E</th><th style={th}>P</th>
+                    <th style={th}>GF</th><th style={th}>GC</th><th style={th}>DIF</th>
+                    <th style={{...th,color:C.accent}}>PTS</th>
+                  </tr></thead>
+                  <tbody>{bt.map((t,i)=>(
+                    <tr key={t.name} style={{borderBottom:`1px solid ${C.bdr}`,background:i<8?C.green+"08":"transparent",opacity:i>=8?0.5:1}}>
+                      <td style={{padding:"10px 16px",color:C.accent,fontSize:14,fontWeight:600}}>{t.group}</td>
+                      <td style={{padding:"10px 8px",color:C.text,fontSize:14,fontWeight:500}}>
+                        <span style={{display:"inline-flex",alignItems:"center",gap:6}}>
+                          {i<8&&<span style={{width:6,height:6,borderRadius:"50%",background:C.green,display:"inline-block",flexShrink:0}}/>}
+                          {gf(t.name)} {t.name}
+                        </span>
+                      </td>
+                      <td style={td}>{t.pj}</td><td style={td}>{t.g}</td><td style={td}>{t.e}</td><td style={td}>{t.p}</td>
+                      <td style={td}>{t.gf}</td><td style={td}>{t.gc}</td>
+                      <td style={{...td,color:t.gf-t.gc>0?C.green:t.gf-t.gc<0?C.red:C.dim}}>{t.gf-t.gc>0?"+":""}{t.gf-t.gc}</td>
+                      <td style={{...td,color:C.accent,fontWeight:700,fontFamily:"Bebas Neue",fontSize:18}}>{t.pts}</td>
+                    </tr>
+                  ))}</tbody>
+                </table>
+              </div>
+            </div>
+          ):null;})()}
         </div>)}
 
         {/* RESULTS */}
