@@ -125,6 +125,25 @@ export default function App() {
   const fin=matches.filter(m=>m.is_finished).length;
   const pendN=Object.entries(drafts).filter(([mid,d])=>d.home!==undefined&&d.home!==""&&d.away!==undefined&&d.away!==""&&!hasPred(parseInt(mid))).length;
 
+  // Group standings calculation
+  const getGroupStandings = (groupName) => {
+    const groupMatches = matches.filter(m => m.group_name === groupName && m.is_finished);
+    const teams = {};
+    // Get all teams in this group (from all matches, not just finished)
+    matches.filter(m => m.group_name === groupName).forEach(m => {
+      if (!teams[m.team_home]) teams[m.team_home] = { name: m.team_home, pj:0, g:0, e:0, p:0, gf:0, gc:0, pts:0 };
+      if (!teams[m.team_away]) teams[m.team_away] = { name: m.team_away, pj:0, g:0, e:0, p:0, gf:0, gc:0, pts:0 };
+    });
+    groupMatches.forEach(m => {
+      const h = teams[m.team_home], a = teams[m.team_away];
+      h.pj++; a.pj++; h.gf += m.score_home; h.gc += m.score_away; a.gf += m.score_away; a.gc += m.score_home;
+      if (m.score_home > m.score_away) { h.g++; h.pts += 3; a.p++; }
+      else if (m.score_home < m.score_away) { a.g++; a.pts += 3; h.p++; }
+      else { h.e++; a.e++; h.pts += 1; a.pts += 1; }
+    });
+    return Object.values(teams).sort((a, b) => b.pts - a.pts || (b.gf - b.gc) - (a.gf - a.gc) || b.gf - a.gf);
+  };
+
   if(loading) return(<div style={{background:C.bg,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}}><style>{fonts}</style><div style={{textAlign:"center"}}><div style={{fontSize:48,marginBottom:16}}>⚽</div><div style={{color:C.accent,fontFamily:"Bebas Neue",fontSize:24,letterSpacing:2}}>CARGANDO...</div></div></div>);
 
   // LOGIN
@@ -185,7 +204,7 @@ export default function App() {
       {/* Nav */}
       <div style={{background:C.srf,borderBottom:`1px solid ${C.bdr}`,padding:"0 20px",overflowX:"auto"}}>
         <div style={{maxWidth:800,margin:"0 auto",display:"flex",gap:0,minWidth:"max-content"}}>
-          {[{id:"ranking",l:"🏅 Ranking",s:true},{id:"predictions",l:"📝 Predicciones",s:true},{id:"results",l:"📊 Resultados",s:true},{id:"admin",l:"👑 Admin",s:user.is_admin}].filter(t=>t.s).map(tab=>(
+          {[{id:"ranking",l:"🏅 Ranking",s:true},{id:"predictions",l:"📝 Predicciones",s:true},{id:"groups",l:"⚽ Grupos",s:true},{id:"results",l:"📊 Resultados",s:true},{id:"admin",l:"👑 Admin",s:user.is_admin}].filter(t=>t.s).map(tab=>(
             <button key={tab.id} onClick={()=>setView(tab.id)} style={{background:view===tab.id?C.accent+"22":"transparent",border:"none",borderBottom:view===tab.id?`2px solid ${C.accent}`:"2px solid transparent",color:view===tab.id?C.accent:C.dim,padding:"12px 16px",cursor:"pointer",fontSize:14,fontWeight:view===tab.id?600:400,whiteSpace:"nowrap"}}>{tab.l}</button>
           ))}
         </div>
@@ -257,6 +276,53 @@ export default function App() {
                 {!locked&&draft.home!==undefined&&draft.home!==""&&draft.away!==undefined&&draft.away!==""&&(
                   <div style={{textAlign:"center",marginTop:10}}><button onClick={()=>submitOne(match.id)} style={{background:C.accent,color:C.bg,border:"none",borderRadius:8,padding:"6px 18px",cursor:"pointer",fontSize:13,fontWeight:600}}>Enviar 🔒</button></div>
                 )}
+              </div>
+            );
+          })}
+        </div>)}
+
+        {/* GROUPS STANDINGS */}
+        {view==="groups"&&(<div>
+          <h3 style={{color:C.text,fontFamily:"Bebas Neue",fontSize:24,letterSpacing:1,marginBottom:16}}>⚽ TABLA DE GRUPOS</h3>
+          <p style={{color:C.dim,fontSize:13,marginBottom:20}}>Posiciones actualizadas en base a los resultados reales</p>
+          {["A","B","C","D","E","F","G","H","I","J","K","L"].map(g=>{
+            const standings = getGroupStandings(g);
+            const groupFinished = matches.filter(m=>m.group_name===g&&m.is_finished).length;
+            return(
+              <div key={g} style={{...crd,marginBottom:16,padding:0,overflow:"hidden"}}>
+                <div style={{background:C.accent+"18",padding:"10px 16px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <span style={{fontFamily:"Bebas Neue",fontSize:18,color:C.accent,letterSpacing:2}}>GRUPO {g}</span>
+                  <span style={{color:C.dim,fontSize:11}}>{groupFinished}/6 partidos</span>
+                </div>
+                <div style={{overflowX:"auto"}}>
+                  <table style={{width:"100%",borderCollapse:"collapse",minWidth:480}}>
+                    <thead>
+                      <tr style={{borderBottom:`1px solid ${C.bdr}`}}>
+                        <th style={{...th,textAlign:"left",paddingLeft:16,width:"40%"}}>Equipo</th>
+                        <th style={th}>PJ</th><th style={th}>G</th><th style={th}>E</th><th style={th}>P</th>
+                        <th style={th}>GF</th><th style={th}>GC</th><th style={th}>DIF</th>
+                        <th style={{...th,color:C.accent}}>PTS</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {standings.map((t,i)=>(
+                        <tr key={t.name} style={{borderBottom:`1px solid ${C.bdr}`,background:i<2?C.green+"08":"transparent"}}>
+                          <td style={{padding:"10px 16px",color:C.text,fontSize:14,fontWeight:500}}>
+                            <span style={{display:"inline-flex",alignItems:"center",gap:8}}>
+                              {i<2&&<span style={{width:6,height:6,borderRadius:"50%",background:C.green,display:"inline-block",flexShrink:0}}/>}
+                              {gf(t.name)} {t.name}
+                            </span>
+                          </td>
+                          <td style={td}>{t.pj}</td><td style={td}>{t.g}</td><td style={td}>{t.e}</td><td style={td}>{t.p}</td>
+                          <td style={td}>{t.gf}</td><td style={td}>{t.gc}</td>
+                          <td style={{...td,color:t.gf-t.gc>0?C.green:t.gf-t.gc<0?C.red:C.dim}}>{t.gf-t.gc>0?"+":""}{t.gf-t.gc}</td>
+                          <td style={{...td,color:C.accent,fontWeight:700,fontFamily:"Bebas Neue",fontSize:18}}>{t.pts}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {groupFinished>0&&<div style={{padding:"6px 16px 10px",fontSize:11,color:C.dim}}>🟢 Clasifican los 2 primeros</div>}
               </div>
             );
           })}
@@ -334,3 +400,5 @@ const btnP={width:"100%",padding:"12px",borderRadius:10,border:"none",background
 const lnk={background:"none",border:"none",color:C.accent,cursor:"pointer",fontSize:14,fontWeight:600};
 const crd={background:C.card,borderRadius:16,padding:24,border:`1px solid ${C.bdr}`};
 const si={width:44,height:40,textAlign:"center",borderRadius:8,border:`1px solid ${C.bdr}`,background:C.srf,color:C.text,fontSize:18,fontWeight:700,fontFamily:"Bebas Neue",outline:"none"};
+const th={padding:"8px 6px",textAlign:"center",color:C.dim,fontSize:11,fontWeight:600,letterSpacing:1};
+const td={padding:"10px 6px",textAlign:"center",color:C.text,fontSize:14};
