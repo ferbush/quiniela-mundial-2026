@@ -128,6 +128,29 @@ export default function App() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [compareMode, setCompareMode] = useState(false);
 
+  const [apiMatches, setApiMatches] = useState([]);
+  const [lastSync, setLastSync] = useState(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [autoSync, setAutoSync] = useState(true);
+  const [rankingMode, setRankingMode] = useState("live");
+
+  const fetchApiMatches = useCallback(async () => {
+    setIsSyncing(true);
+    try {
+      const res = await fetch("https://worldcup26.ir/get/games");
+      if (!res.ok) throw new Error("API response error");
+      const data = await res.json();
+      if (data && data.games) {
+        setApiMatches(data.games);
+        setLastSync(new Date());
+      }
+    } catch (e) {
+      console.error("Failed to fetch API matches:", e);
+    } finally {
+      setIsSyncing(false);
+    }
+  }, []);
+
   const load = useCallback(async () => {
     try {
       const [m,p,a] = await Promise.all([supa("matches?order=match_number.asc"),supa("participants?order=name.asc"),supa("predictions?select=*")]);
@@ -137,7 +160,19 @@ export default function App() {
     setLoading(false);
   },[user]);
 
-  useEffect(()=>{ load(); },[load]);
+  useEffect(() => {
+    load();
+    fetchApiMatches();
+  }, [load, fetchApiMatches]);
+
+  useEffect(() => {
+    if (!autoSync) return;
+    const t = setInterval(() => {
+      fetchApiMatches();
+    }, 60000);
+    return () => clearInterval(t);
+  }, [autoSync, fetchApiMatches]);
+
   useEffect(()=>{ if(err||ok){ const t=setTimeout(()=>{setErr("");setOk("");},4000); return ()=>clearTimeout(t); } },[err,ok]);
 
   const login = async () => {
@@ -196,14 +231,113 @@ export default function App() {
     } catch(e){ setErr("Error: "+e.message); }
   };
 
-  const ranking = parts.map(p=>{
-    const pp=allPreds.filter(pr=>pr.participant_id===p.id);
-    return {...p, pts:pp.reduce((s,pr)=>s+(pr.points_earned||0),0), ex:pp.filter(pr=>pr.points_earned===5).length, ac:pp.filter(pr=>pr.points_earned===3).length, tp:pp.length};
-  }).sort((a,b)=>b.pts-a.pts||b.ex-a.ex);
+  const syncAllFinishedMatchesFromApi = async () => {
+    if (!user?.is_admin || apiMatches.length === 0) return;
+    setSending(true);
+    setIsSyncing(true);
+    setErr("");
+    setOk("");
+    let updatedMatchesCount = 0;
+    try {
+      const finishedApiMatches = apiMatches.filter(m => m.finished === "TRUE");
+      for (const apiM of finishedApiMatches) {
+        const dbM = matches.find(m => String(m.match_number) === String(apiM.id));
+        if (dbM) {
+          const apiScoreHome = parseInt(apiM.home_score);
+          const apiScoreAway = parseInt(apiM.away_score);
+          if (!dbM.is_finished || dbM.score_home !== apiScoreHome || dbM.score_away !== apiScoreAway) {
+            await supa(`matches?id=eq.${dbM.id}`, {
+              method: "PATCH",
+              headers: { ...hdrs, Prefer: "return=representation" },
+              body: JSON.stringify({
+                score_home: apiScoreHome,
+                score_away: apiScoreAway,
+                is_finished: true
+              })
+            });
+            const freshPreds = await supa(`predictions?match_id=eq.${dbM.id}`);
+            for (const pr of (freshPreds || [])) {
+              const pts = calcPts(pr.pred_home, pr.pred_away, apiScoreHome, apiScoreAway);
+              await supa(`predictions?id=eq.${pr.id}`, {
+                method: "PATCH",
+                body: JSON.stringify({ points_earned: pts })
+              });
+            }
+            updatedMatchesCount++;
+          }
+        }
+      }
+      await load();
+      if (updatedMatchesCount > 0) {
+        setOk(`¡Sincronización completa! Se actualizaron ${updatedMatchesCount} partidos en Supabase.`);
+        triggerConfetti();
+      } else {
+        setOk("Todos los resultados de la base de datos ya están al día con la API.");
+      }
+    } catch (e) {
+      setErr("Error durante la sincronización: " + e.message);
+    } finally {
+      setSending(false);
+      setIsSyncing(false);
+    }
+  };
+
+  const mergedMatches = matches.map(dbMatch => {
+    const apiMatch = apiMatches.find(m => String(m.id) === String(dbMatch.match_number));
+    if (apiMatch && autoSync) {
+      const apiFinished = apiMatch.finished === "TRUE";
+      const apiLive = !apiFinished && apiMatch.time_elapsed !== "notstarted" && apiMatch.time_elapsed !== "finished";
+      const homeScore = (apiFinished || apiLive) && apiMatch.home_score !== null && apiMatch.home_score !== "null" ? parseInt(apiMatch.home_score) : null;
+      const awayScore = (apiFinished || apiLive) && apiMatch.away_score !== null && apiMatch.away_score !== "null" ? parseInt(apiMatch.away_score) : null;
+      return {
+        ...dbMatch,
+        score_home: homeScore !== null ? homeScore : dbMatch.score_home,
+        score_away: awayScore !== null ? awayScore : dbMatch.score_away,
+        is_finished: apiFinished,
+        is_live: apiLive,
+        time_elapsed: apiMatch.time_elapsed
+      };
+    }
+    return {
+      ...dbMatch,
+      is_live: false,
+      time_elapsed: dbMatch.is_finished ? "finished" : "notstarted"
+    };
+  });
+
+  const getRanking = useCallback((useLive) => {
+    return parts.map(p => {
+      const pp = allPreds.filter(pr => pr.participant_id === p.id);
+      let pts = 0;
+      let ex = 0;
+      let ac = 0;
+      pp.forEach(pr => {
+        const m = mergedMatches.find(match => match.id === pr.match_id);
+        if (!m) return;
+        if (m.is_finished || (useLive && m.is_live)) {
+          const pPoints = calcPts(pr.pred_home, pr.pred_away, m.score_home, m.score_away);
+          pts += pPoints;
+          if (pPoints === 5) ex++;
+          else if (pPoints === 3) ac++;
+        }
+      });
+      return { ...p, pts, ex, ac, tp: pp.length };
+    }).sort((a, b) => b.pts - a.pts || b.ex - a.ex || a.name.localeCompare(b.name));
+  }, [parts, allPreds, mergedMatches]);
+
+  const officialRanking = getRanking(false);
+  const liveRanking = getRanking(true);
+  const ranking = rankingMode === "live" ? liveRanking : officialRanking;
+
+  const getRankChange = (participantId, currentRankIndex) => {
+    const offIndex = officialRanking.findIndex(p => p.id === participantId);
+    if (offIndex === -1) return 0;
+    return offIndex - currentRankIndex;
+  };
 
   const GS=["ALL","A","B","C","D","E","F","G","H","I","J","K","L"];
-  const fm = grp==="ALL"?matches:matches.filter(m=>m.group_name===grp);
-  const fin=matches.filter(m=>m.is_finished).length;
+  const fm = grp==="ALL"?mergedMatches:mergedMatches.filter(m=>m.group_name===grp);
+  const fin=mergedMatches.filter(m=>m.is_finished).length;
   const pendN=Object.entries(drafts).filter(([mid,d])=>d.home!==undefined&&d.home!==""&&d.away!==undefined&&d.away!==""&&!hasPred(parseInt(mid))).length;
 
   const filteredMatches = fm.filter(match => {
@@ -231,9 +365,9 @@ export default function App() {
 
   // Group standings calculation (real results)
   const getGroupStandings = (groupName) => {
-    const groupMatches = matches.filter(m => m.group_name === groupName && m.is_finished);
+    const groupMatches = mergedMatches.filter(m => m.group_name === groupName && m.is_finished);
     const teams = {};
-    matches.filter(m => m.group_name === groupName).forEach(m => {
+    mergedMatches.filter(m => m.group_name === groupName).forEach(m => {
       if (!teams[m.team_home]) teams[m.team_home] = { name: m.team_home, pj:0, g:0, e:0, p:0, gf:0, gc:0, pts:0 };
       if (!teams[m.team_away]) teams[m.team_away] = { name: m.team_away, pj:0, g:0, e:0, p:0, gf:0, gc:0, pts:0 };
     });
@@ -250,7 +384,7 @@ export default function App() {
   // Group standings based on USER PREDICTIONS
   const getGroupStandingsPred = (groupName) => {
     const teams = {};
-    matches.filter(m => m.group_name === groupName).forEach(m => {
+    mergedMatches.filter(m => m.group_name === groupName).forEach(m => {
       if (!teams[m.team_home]) teams[m.team_home] = { name: m.team_home, pj:0, g:0, e:0, p:0, gf:0, gc:0, pts:0 };
       if (!teams[m.team_away]) teams[m.team_away] = { name: m.team_away, pj:0, g:0, e:0, p:0, gf:0, gc:0, pts:0 };
       // Use prediction or draft for this match
@@ -368,12 +502,43 @@ export default function App() {
             <div className="glass-card progress-card">
               <div className="progress-details">
                 <span className="text-dim text-sm">Progreso del torneo</span>
-                <span className="progress-count text-bebas">{fin}/{matches.length} partidos</span>
+                <span className="progress-count text-bebas">{fin}/{mergedMatches.length} partidos</span>
               </div>
               <div className="progress-bar-container">
-                <div className="progress-bar-fill" style={{width:`${matches.length>0?(fin/matches.length)*100:0}%`}}/>
+                <div className="progress-bar-fill" style={{width:`${mergedMatches.length>0?(fin/mergedMatches.length)*100:0}%`}}/>
               </div>
             </div>
+
+            <div className="ranking-controls-row">
+              <div className="ranking-mode-selector">
+                <button 
+                  onClick={() => setRankingMode("live")} 
+                  className={`btn-tab-pill ${rankingMode === "live" ? "active" : ""}`}
+                >
+                  ● Tabla En Vivo
+                </button>
+                <button 
+                  onClick={() => setRankingMode("official")} 
+                  className={`btn-tab-pill ${rankingMode === "official" ? "active" : ""}`}
+                >
+                  Tabla Oficial
+                </button>
+              </div>
+              <div className="sync-status-indicator">
+                {isSyncing ? (
+                  <span className="sync-spinner">🔄 Sincronizando...</span>
+                ) : lastSync ? (
+                  <span className="sync-time" title="Actualizar ahora" onClick={fetchApiMatches} style={{cursor: "pointer"}}>
+                    Sincronizado: {lastSync.toLocaleTimeString()} ⚡
+                  </span>
+                ) : (
+                  <span className="sync-error-text" onClick={fetchApiMatches} style={{cursor: "pointer"}}>
+                    Error de sincronización ⚠️
+                  </span>
+                )}
+              </div>
+            </div>
+
             <h3 className="section-title text-bebas">🏅 TABLA DE POSICIONES</h3>
             <div className="ranking-list">
               {ranking.map((p,i)=>{
@@ -390,9 +555,18 @@ export default function App() {
                 else if(i===1) badgeClass += " rank-badge-2";
                 else if(i===2) badgeClass += " rank-badge-3";
 
+                const rankChange = rankingMode === "live" ? getRankChange(p.id, i) : 0;
+
                 return(
                   <div key={p.id} className={rankClass}>
-                    <div className={badgeClass}>{i===0?"👑":i+1}</div>
+                    <div className="rank-badge-container">
+                      <div className={badgeClass}>{i===0?"👑":i+1}</div>
+                      {rankChange !== 0 && (
+                        <span className={`rank-change-badge ${rankChange > 0 ? "rank-up" : "rank-down"}`}>
+                          {rankChange > 0 ? `▲ ${rankChange}` : `▼ ${Math.abs(rankChange)}`}
+                        </span>
+                      )}
+                    </div>
                     <div className="ranking-item-body">
                       <div className="participant-name">{p.name}{p.id===user.id?<span className="self-tag"> (tú)</span>:""}</div>
                       <div className="participant-stats">
@@ -557,11 +731,16 @@ export default function App() {
                 <GF gs={GS} sel={grp} set={setGrp}/>
                 <div className="fixtures-list">
                   {filteredMatches.map(match=>{
-                    const pred=getPred(match.id), locked=!!pred, draft=drafts[match.id]||{}, finished=match.is_finished;
-                    let pts=null; if(finished&&pred) pts=calcPts(pred.pred_home,pred.pred_away,match.score_home,match.score_away);
+                    const pred=getPred(match.id), locked=!!pred, draft=drafts[match.id]||{}, finished=match.is_finished, isLive=match.is_live;
+                    let pts=null; 
+                    if ((finished || isLive) && pred) {
+                      pts = calcPts(pred.pred_home, pred.pred_away, match.score_home, match.score_away);
+                    }
                     
                     let matchCardClass = "match-card";
-                    if(finished){
+                    if(isLive){
+                      matchCardClass += " match-card-live";
+                    } else if(finished){
                       if(pts===5) matchCardClass += " match-card-exact";
                       else if(pts===3) matchCardClass += " match-card-winner";
                       else matchCardClass += " match-card-incorrect";
@@ -569,14 +748,25 @@ export default function App() {
                       matchCardClass += " match-card-locked";
                     }
                     
+                    let liveGlowClass = "";
+                    if (isLive && pred) {
+                      if (pts === 5) liveGlowClass = "live-glow-exact";
+                      else if (pts === 3) liveGlowClass = "live-glow-winner";
+                    }
+
                     return(
                       <div key={match.id} className={matchCardClass}>
                         <div className="match-card-header">
-                          <span className="match-meta">Grupo {match.group_name} · #{match.match_number} · {match.match_date}</span>
+                          <span className="match-meta">
+                            Grupo {match.group_name} · #{match.match_number} · {match.match_date}
+                            {isLive && <span className="live-minute-badge"> {match.time_elapsed}'</span>}
+                          </span>
+                          {isLive && <span className="badge badge-live">● EN VIVO</span>}
                           {finished&&pts!==null&&<span className={`badge ${pts===5?'badge-success':pts===3?'badge-info':'badge-danger'} badge-pts-earned`}>{pts===5?"🎯 EXACTO +5":pts===3?"✓ +3":"✗ 0"}</span>}
-                          {!finished&&locked&&<span className="badge badge-success">🔒 Enviado</span>}
-                          {!finished&&!locked&&!draft.home&&!draft.away&&<span className="badge badge-neutral">Pendiente</span>}
-                          {!finished&&!locked&&(draft.home!==undefined||draft.away!==undefined)&&<span className="badge badge-warning">Sin guardar</span>}
+                          {isLive&&pts!==null&&pts>0&&<span className={`badge ${pts===5?'badge-success-glow':'badge-info-glow'} badge-pts-earned`}>{pts===5?"🎯 EXACTO +5 (Parcial)":"✓ +3 (Parcial)"}</span>}
+                          {!finished&&!isLive&&locked&&<span className="badge badge-success">🔒 Enviado</span>}
+                          {!finished&&!isLive&&!locked&&!draft.home&&!draft.away&&<span className="badge badge-neutral">Pendiente</span>}
+                          {!finished&&!isLive&&!locked&&(draft.home!==undefined||draft.away!==undefined)&&<span className="badge badge-warning">Sin guardar</span>}
                         </div>
                         <div className="match-fixture-row">
                           <div className="team-home">
@@ -585,7 +775,7 @@ export default function App() {
                           </div>
                           <div className="score-inputs-container">
                             {locked?(
-                              <div className="locked-prediction text-bebas">
+                              <div className={`locked-prediction text-bebas ${liveGlowClass}`}>
                                 <span className="predicted-score">{pred.pred_home}</span>
                                 <span className="score-separator">:</span>
                                 <span className="predicted-score">{pred.pred_away}</span>
@@ -603,7 +793,7 @@ export default function App() {
                             <span className="team-name">{match.team_away}</span>
                           </div>
                         </div>
-                        {finished&&<div className="real-score-row">Resultado real: <span className="real-score-accent text-bebas">{match.score_home} - {match.score_away}</span></div>}
+                        {(finished || isLive) && <div className="real-score-row">Resultado {isLive ? "parcial" : "real"}: <span className="real-score-accent text-bebas" style={{color: isLive ? "var(--green)" : "var(--accent)"}}>{match.score_home} - {match.score_away}</span></div>}
                         {!locked&&draft.home!==undefined&&draft.home!==""&&draft.away!==undefined&&draft.away!==""&&(
                           <div className="match-card-actions">
                             <button onClick={()=>submitOne(match.id)} className="btn-success btn-sm-action">Enviar 🔒</button>
@@ -728,8 +918,11 @@ export default function App() {
             <GF gs={GS} sel={grp} set={setGrp}/>
             <div className="fixtures-list">
               {filteredMatches.map(m=>{
+                const isLive = m.is_live;
                 let cardClass = "match-card";
-                if(m.is_finished){
+                if (isLive) {
+                  cardClass += " match-card-live";
+                } else if (m.is_finished) {
                   cardClass += " match-card-locked";
                 } else {
                   cardClass += " match-card-finished opacity-60";
@@ -738,8 +931,13 @@ export default function App() {
                 return(
                   <div key={m.id} className={cardClass}>
                     <div className="match-card-header">
-                      <span className="match-meta">Grupo {m.group_name} · #{m.match_number} · {m.match_date}</span>
-                      {m.is_finished ? (
+                      <span className="match-meta">
+                        Grupo {m.group_name} · #{m.match_number} · {m.match_date}
+                        {isLive && <span className="live-minute-badge"> {m.time_elapsed}'</span>}
+                      </span>
+                      {isLive ? (
+                        <span className="badge badge-live">● EN VIVO</span>
+                      ) : m.is_finished ? (
                         <span className="badge badge-success">✓ FINAL</span>
                       ) : (
                         <span className="badge badge-neutral">Pendiente</span>
@@ -752,11 +950,11 @@ export default function App() {
                       </div>
                       <div className="score-inputs-container">
                         <div className="locked-prediction text-bebas">
-                          {m.is_finished ? (
+                          {(m.is_finished || isLive) ? (
                             <>
-                              <span className="predicted-score" style={{color:"var(--accent)"}}>{m.score_home}</span>
+                              <span className="predicted-score" style={{color: isLive ? "var(--green)" : "var(--accent)"}}>{m.score_home}</span>
                               <span className="score-separator">-</span>
-                              <span className="predicted-score" style={{color:"var(--accent)"}}>{m.score_away}</span>
+                              <span className="predicted-score" style={{color: isLive ? "var(--green)" : "var(--accent)"}}>{m.score_away}</span>
                             </>
                           ) : (
                             <span className="predicted-score" style={{color:"var(--text-dim)"}}>vs</span>
@@ -795,9 +993,18 @@ export default function App() {
             </div>
             {selectedPart ? (()=>{
               const partPreds = allPreds.filter(pr=>pr.participant_id===selectedPart.id);
-              const totalPts = partPreds.reduce((s,pr)=>s+(pr.points_earned||0),0);
-              const exactos = partPreds.filter(pr=>pr.points_earned===5).length;
-              const aciertos = partPreds.filter(pr=>pr.points_earned===3).length;
+              let totalPts = 0;
+              let exactos = 0;
+              let aciertos = 0;
+              partPreds.forEach(pr => {
+                const m = mergedMatches.find(match => match.id === pr.match_id);
+                if (m && (m.is_finished || m.is_live)) {
+                  const pts = calcPts(pr.pred_home, pr.pred_away, m.score_home, m.score_away);
+                  totalPts += pts;
+                  if (pts === 5) exactos++;
+                  else if (pts === 3) aciertos++;
+                }
+              });
               return(
                 <div className="participant-dashboard fade-in">
                   <div className="glass-card summary-dashboard">
@@ -891,10 +1098,16 @@ export default function App() {
                         }
                         
                         return (
-                          <div key={match.id} className={`match-card ${compClass}`}>
+                          <div key={match.id} className={`match-card ${compClass} ${match.is_live ? "match-card-live" : ""}`}>
                             <div className="match-card-header">
-                              <span className="match-meta">Grupo {match.group_name} · #{match.match_number} · {match.match_date}</span>
-                              <span className={`badge ${compBadgeClass}`}>{compBadgeText}</span>
+                              <span className="match-meta">
+                                Grupo {match.group_name} · #{match.match_number} · {match.match_date}
+                                {match.is_live && <span className="live-minute-badge"> {match.time_elapsed}'</span>}
+                              </span>
+                              <div style={{ display: "flex", gap: 6 }}>
+                                {match.is_live && <span className="badge badge-live">● EN VIVO</span>}
+                                <span className={`badge ${compBadgeClass}`}>{compBadgeText}</span>
+                              </div>
                             </div>
                             <div className="comparison-fixture-row">
                               <div className="comparison-team-side">
@@ -923,10 +1136,17 @@ export default function App() {
 
                       // STANDARD VIEW RENDERING
                       if(!pred) return(
-                        <div key={match.id} className="match-card match-card-finished opacity-60">
+                        <div key={match.id} className={`match-card ${match.is_live ? "match-card-live" : "match-card-finished opacity-60"}`}>
                           <div className="match-card-header">
-                            <span className="match-meta">Grupo {match.group_name} · #{match.match_number}</span>
-                            <span className="badge badge-neutral">Sin predicción</span>
+                            <span className="match-meta">
+                              Grupo {match.group_name} · #{match.match_number}
+                              {match.is_live && <span className="live-minute-badge"> {match.time_elapsed}'</span>}
+                            </span>
+                            {match.is_live ? (
+                              <span className="badge badge-live">● EN VIVO</span>
+                            ) : (
+                              <span className="badge badge-neutral">Sin predicción</span>
+                            )}
                           </div>
                           <div className="match-fixture-row">
                             <div className="team-home">
@@ -944,10 +1164,13 @@ export default function App() {
                         </div>
                       );
                       const finished = match.is_finished;
-                      const pts = finished ? calcPts(pred.pred_home,pred.pred_away,match.score_home,match.score_away) : null;
+                      const isLive = match.is_live;
+                      const pts = (finished || isLive) ? calcPts(pred.pred_home,pred.pred_away,match.score_home,match.score_away) : null;
                       
                       let matchCardClass = "match-card";
-                      if(finished){
+                      if(isLive){
+                        matchCardClass += " match-card-live";
+                      } else if(finished){
                         if(pts===5) matchCardClass += " match-card-exact";
                         else if(pts===3) matchCardClass += " match-card-winner";
                         else matchCardClass += " match-card-incorrect";
@@ -955,12 +1178,23 @@ export default function App() {
                         matchCardClass += " match-card-locked";
                       }
 
+                      let liveGlowClass = "";
+                      if (isLive && pts) {
+                        if (pts === 5) liveGlowClass = "live-glow-exact";
+                        else if (pts === 3) liveGlowClass = "live-glow-winner";
+                      }
+
                       return(
                         <div key={match.id} className={matchCardClass}>
                           <div className="match-card-header">
-                            <span className="match-meta">Grupo {match.group_name} · #{match.match_number} · {match.match_date}</span>
+                            <span className="match-meta">
+                              Grupo {match.group_name} · #{match.match_number} · {match.match_date}
+                              {isLive && <span className="live-minute-badge"> {match.time_elapsed}'</span>}
+                            </span>
+                            {isLive && <span className="badge badge-live">● EN VIVO</span>}
                             {finished&&pts!==null&&<span className={`badge ${pts===5?'badge-success':pts===3?'badge-info':'badge-danger'} badge-pts-earned`}>{pts===5?"🎯 +5":pts===3?"✓ +3":"✗ 0"}</span>}
-                            {!finished&&<span className="badge badge-success">🔒 Enviado</span>}
+                            {isLive&&pts!==null&&pts>0&&<span className={`badge ${pts===5?'badge-success-glow':'badge-info-glow'} badge-pts-earned`}>{pts===5?"🎯 +5 (Parcial)":"✓ +3 (Parcial)"}</span>}
+                            {!finished&&!isLive&&<span className="badge badge-success">🔒 Enviado</span>}
                           </div>
                           <div className="match-fixture-row">
                             <div className="team-home">
@@ -968,7 +1202,7 @@ export default function App() {
                               <span className="flag-emoji large">{gf(match.team_home)}</span>
                             </div>
                             <div className="score-inputs-container">
-                              <div className="locked-prediction text-bebas">
+                              <div className={`locked-prediction text-bebas ${liveGlowClass}`}>
                                 <span className="predicted-score">{pred.pred_home}</span>
                                 <span className="score-separator">:</span>
                                 <span className="predicted-score">{pred.pred_away}</span>
@@ -979,7 +1213,7 @@ export default function App() {
                               <span className="team-name">{match.team_away}</span>
                             </div>
                           </div>
-                          {finished&&<div className="real-score-row">Resultado real: <span className="real-score-accent text-bebas">{match.score_home} - {match.score_away}</span></div>}
+                          {(finished || isLive) && <div className="real-score-row">Resultado {isLive ? "parcial" : "real"}: <span className="real-score-accent text-bebas" style={{color: isLive ? "var(--green)" : "var(--accent)"}}>{match.score_home} - {match.score_away}</span></div>}
                         </div>
                       );
                     })}
@@ -1001,6 +1235,31 @@ export default function App() {
           <div className="view-admin fade-in">
             <h3 className="section-title text-bebas">👑 PANEL DE ADMIN</h3>
             <p className="section-subtitle">Ingresá los resultados reales. Los puntos se recalculan para todos.</p>
+            
+            <div className="glass-card admin-summary-card" style={{ marginBottom: 24 }}>
+              <h4 className="admin-subtitle text-bebas">🔌 SINCRONIZACIÓN AUTOMÁTICA (API)</h4>
+              <p className="text-dim text-sm" style={{ marginBottom: 12 }}>
+                Sincronizá todos los partidos finalizados desde la API de la Copa del Mundo 2026 directamente a la base de datos Supabase de forma masiva.
+              </p>
+              <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+                <button 
+                  onClick={syncAllFinishedMatchesFromApi} 
+                  disabled={isSyncing || apiMatches.length === 0} 
+                  className="btn-primary"
+                  style={{ width: "auto", padding: "10px 20px" }}
+                >
+                  {isSyncing ? "Procesando..." : "Sincronizar y Guardar Resultados Finales 💾"}
+                </button>
+                <div className="sync-status-indicator" style={{ display: "inline-block" }}>
+                  {apiMatches.length > 0 ? (
+                    <span className="text-green font-medium" style={{color:"var(--green)"}}>✓ API lista ({apiMatches.length} partidos cargados)</span>
+                  ) : (
+                    <span className="text-red font-medium" style={{color:"var(--red)"}}>⚠️ API no disponible para guardado masivo</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
             <div className="glass-card admin-summary-card">
               <h4 className="admin-subtitle text-bebas">PARTICIPANTES ({parts.length})</h4>
               <div className="admin-users-list">

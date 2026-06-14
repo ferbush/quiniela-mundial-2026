@@ -1335,3 +1335,155 @@ body {
 .match-card-conflict {
   border-color: rgba(239, 68, 68, 0.15);
 }
+
+/* ==========================================================================
+   LIVE MATCH AND STANDINGS UPDATER STYLES
+   ========================================================================== */
+
+/* Live Controls & Sync Status */
+.ranking-controls-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.ranking-mode-selector {
+  display: flex;
+  gap: 8px;
+}
+.sync-status-indicator {
+  font-size: 13px;
+  color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 6px 12px;
+  border-radius: 9999px;
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.sync-time:hover {
+  color: var(--accent);
+}
+.sync-spinner {
+  color: var(--accent);
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Rank change badges */
+.rank-badge-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.rank-change-badge {
+  position: absolute;
+  bottom: -6px;
+  right: -6px;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 4px;
+  line-height: 1;
+  box-shadow: var(--shadow-sm);
+  display: inline-flex;
+  align-items: center;
+}
+.rank-up {
+  background: rgba(16, 185, 129, 0.2);
+  color: var(--green);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+}
+.rank-down {
+  background: rgba(239, 68, 68, 0.2);
+  color: var(--red);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+/* Live Match Card Styling */
+.match-card-live {
+  border-color: rgba(16, 185, 129, 0.45) !important;
+  box-shadow: 0 0 15px rgba(16, 185, 129, 0.15) !important;
+  background: linear-gradient(135deg, rgba(22, 28, 45, 0.8) 0%, rgba(16, 185, 129, 0.03) 100%) !important;
+  position: relative;
+  overflow: hidden;
+}
+.match-card-live::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  background: var(--green);
+  box-shadow: 0 0 10px var(--green);
+}
+
+.live-minute-badge {
+  background: rgba(16, 185, 129, 0.25);
+  color: var(--green);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  margin-left: 6px;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  letter-spacing: 0.5px;
+}
+
+.badge-live {
+  background: rgba(239, 68, 68, 0.2) !important;
+  border: 1px solid var(--red) !important;
+  color: var(--red) !important;
+  font-weight: 700 !important;
+  animation: pulse-live 1.8s infinite ease-in-out;
+  letter-spacing: 1px;
+}
+
+@keyframes pulse-live {
+  0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); opacity: 1; }
+  50% { transform: scale(0.95); opacity: 0.7; }
+  100% { transform: scale(1); box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); opacity: 1; }
+}
+
+/* Live predictions glows */
+.live-glow-exact {
+  border-color: var(--green) !important;
+  box-shadow: 0 0 15px rgba(16, 185, 129, 0.4) !important;
+  background: rgba(16, 185, 129, 0.1) !important;
+  animation: border-glow-green 2s infinite ease-in-out;
+}
+.live-glow-winner {
+  border-color: var(--blue) !important;
+  box-shadow: 0 0 15px rgba(59, 130, 246, 0.4) !important;
+  background: rgba(59, 130, 246, 0.1) !important;
+  animation: border-glow-blue 2s infinite ease-in-out;
+}
+
+.badge-success-glow {
+  background: var(--green) !important;
+  color: #fff !important;
+  box-shadow: 0 0 10px var(--green);
+}
+.badge-info-glow {
+  background: var(--blue) !important;
+  color: #fff !important;
+  box-shadow: 0 0 10px var(--blue);
+}
+
+@keyframes border-glow-green {
+  0%, 100% { border-color: rgba(16, 185, 129, 0.55); box-shadow: 0 0 10px rgba(16, 185, 129, 0.2); }
+  50% { border-color: rgba(16, 185, 129, 1); box-shadow: 0 0 18px rgba(16, 185, 129, 0.55); }
+}
+@keyframes border-glow-blue {
+  0%, 100% { border-color: rgba(59, 130, 246, 0.55); box-shadow: 0 0 10px rgba(59, 130, 246, 0.2); }
+  50% { border-color: rgba(59, 130, 246, 1); box-shadow: 0 0 18px rgba(59, 130, 246, 0.55); }
+}
+
+/* Extra utility colors */
+.text-green { color: var(--green); }
+.text-red { color: var(--red); }
+.text-blue { color: var(--blue); }
