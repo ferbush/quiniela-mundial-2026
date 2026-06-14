@@ -28,8 +28,84 @@ const FL = {
 const gf = t => FL[t]||"🏳️";
 
 function calcPts(ph,pa,rh,ra){ if(rh===null||ra===null) return 0; if(ph===rh&&pa===ra) return 5; const p=ph>pa?"H":ph<pa?"A":"D", r=rh>ra?"H":rh<ra?"A":"D"; return p===r?3:0; }
+function triggerConfetti() {
+  const canvas = document.createElement("canvas");
+  canvas.style.position = "fixed";
+  canvas.style.top = "0";
+  canvas.style.left = "0";
+  canvas.style.width = "100%";
+  canvas.style.height = "100%";
+  canvas.style.pointerEvents = "none";
+  canvas.style.zIndex = "99999";
+  document.body.appendChild(canvas);
 
+  const ctx = canvas.getContext("2d");
+  let width = canvas.width = window.innerWidth;
+  let height = canvas.height = window.innerHeight;
 
+  const handleResize = () => {
+    width = canvas.width = window.innerWidth;
+    height = canvas.height = window.innerHeight;
+  };
+  window.addEventListener("resize", handleResize);
+
+  const colors = ["#f59e0b", "#10b981", "#3b82f6", "#ef4444", "#ec4899", "#8b5cf6"];
+  const particles = [];
+
+  for (let i = 0; i < 120; i++) {
+    particles.push({
+      x: Math.random() * width,
+      y: Math.random() * height - height,
+      r: Math.random() * 4 + 4,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      tilt: Math.random() * 10 - 5,
+      tiltAngleIncremental: Math.random() * 0.07 + 0.02,
+      tiltAngle: 0,
+      velocity: {
+        x: Math.random() * 4 - 2,
+        y: Math.random() * 4 + 3
+      }
+    });
+  }
+
+  let animationFrameId;
+  const startTime = Date.now();
+
+  function draw() {
+    ctx.clearRect(0, 0, width, height);
+
+    let active = false;
+    particles.forEach((p) => {
+      p.tiltAngle += p.tiltAngleIncremental;
+      p.y += p.velocity.y;
+      p.x += p.velocity.x;
+      p.tilt = Math.sin(p.tiltAngle) * 4;
+
+      if (p.y <= height + 20) {
+        active = true;
+      }
+
+      ctx.beginPath();
+      ctx.lineWidth = p.r;
+      ctx.strokeStyle = p.color;
+      ctx.moveTo(p.x + p.tilt + p.r / 2, p.y);
+      ctx.lineTo(p.x + p.tilt, p.y + p.tilt + p.r / 2);
+      ctx.stroke();
+    });
+
+    if (active && Date.now() - startTime < 3500) {
+      animationFrameId = requestAnimationFrame(draw);
+    } else {
+      cancelAnimationFrame(animationFrameId);
+      window.removeEventListener("resize", handleResize);
+      if (canvas.parentNode) {
+        canvas.parentNode.removeChild(canvas);
+      }
+    }
+  }
+
+  draw();
+}
 
 
 export default function App() {
@@ -48,6 +124,9 @@ export default function App() {
   const [sending, setSending] = useState(false);
   const [showSim, setShowSim] = useState(false);
   const [selectedPart, setSelectedPart] = useState(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [compareMode, setCompareMode] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -77,7 +156,7 @@ export default function App() {
       if(ex&&ex.length>0){setErr("Ese nombre ya está registrado. Usá otro.");return;}
     } catch{ setErr("Error verificando nombre"); return; }
     try { const r=await supa("participants",{method:"POST",headers:{...hdrs,Prefer:"return=representation"},body:JSON.stringify({name:nm,pin:rPin})});
-      if(r&&r.length>0){setUser(r[0]);setOk("¡Registrado! Ingresá tus predicciones");setView("predictions");setRName("");setRPin("");load();}
+      if(r&&r.length>0){setUser(r[0]);setOk("¡Registrado! Ingresá tus predicciones");setView("predictions");setRName("");setRPin("");load();triggerConfetti();}
     } catch(e){ e.message.includes("duplicate")?setErr("Nombre ya registrado"):setErr("Error al registrar"); }
   };
 
@@ -90,7 +169,7 @@ export default function App() {
     if(!user||hasPred(mid)) return; const d=drafts[mid];
     if(!d||d.home===undefined||d.home===""||d.away===undefined||d.away===""){setErr("Ingresá ambos marcadores");return;}
     try { await supa("predictions",{method:"POST",headers:{...hdrs,Prefer:"return=representation"},body:JSON.stringify({participant_id:user.id,match_id:mid,pred_home:parseInt(d.home),pred_away:parseInt(d.away)})});
-      setDrafts(p=>{const n={...p};delete n[mid];return n;}); await load(); setOk("Predicción bloqueada ✓");
+      setDrafts(p=>{const n={...p};delete n[mid];return n;}); await load(); setOk("Predicción bloqueada ✓");triggerConfetti();
     } catch(e){ setErr("Error: "+e.message); }
   };
 
@@ -102,7 +181,7 @@ export default function App() {
       try { await supa("predictions",{method:"POST",headers:{...hdrs,Prefer:"return=representation"},body:JSON.stringify({participant_id:user.id,match_id:parseInt(mid),pred_home:parseInt(d.home),pred_away:parseInt(d.away)})}); n++;
       } catch(e){ console.error(e); }
     }
-    setDrafts({}); await load(); setOk(`${n} predicciones bloqueadas ✓`); setSending(false);
+    setDrafts({}); await load(); setOk(`${n} predicciones bloqueadas ✓`); setSending(false);triggerConfetti();
   };
 
   const updResult = async (mid,sh,sa) => {
@@ -126,6 +205,29 @@ export default function App() {
   const fm = grp==="ALL"?matches:matches.filter(m=>m.group_name===grp);
   const fin=matches.filter(m=>m.is_finished).length;
   const pendN=Object.entries(drafts).filter(([mid,d])=>d.home!==undefined&&d.home!==""&&d.away!==undefined&&d.away!==""&&!hasPred(parseInt(mid))).length;
+
+  const filteredMatches = fm.filter(match => {
+    const matchesSearch = searchQuery.trim() === "" ||
+      match.team_home.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      match.team_away.toLowerCase().includes(searchQuery.toLowerCase());
+      
+    if (!matchesSearch) return false;
+    
+    const pred = getPred(match.id);
+    const locked = !!pred;
+    const finished = match.is_finished;
+    
+    if (statusFilter === "pending") {
+      return !locked && !finished;
+    }
+    if (statusFilter === "locked") {
+      return locked && !finished;
+    }
+    if (statusFilter === "finished") {
+      return finished;
+    }
+    return true;
+  });
 
   // Group standings calculation (real results)
   const getGroupStandings = (groupName) => {
@@ -251,7 +353,7 @@ export default function App() {
       <nav className="nav-bar">
         <div className="nav-inner nav-container">
           {[{id:"ranking",l:"🏅 Ranking",s:true},{id:"predictions",l:"📝 Predicciones",s:true},{id:"groups",l:"⚽ Grupos",s:true},{id:"results",l:"📊 Resultados",s:true},{id:"transparency",l:"👁️ Quinielas",s:true},{id:"admin",l:"👑 Admin",s:user.is_admin}].filter(t=>t.s).map(tab=>(
-            <button key={tab.id} onClick={()=>setView(tab.id)} className={`nav-btn ${view===tab.id?'active':''}`}>{tab.l}</button>
+            <button key={tab.id} onClick={()=>{setView(tab.id); setSearchQuery(""); setStatusFilter("all"); setCompareMode(false);}} className={`nav-btn ${view===tab.id?'active':''}`}>{tab.l}</button>
           ))}
         </div>
       </nav>
@@ -431,9 +533,30 @@ export default function App() {
                   <span className="banner-icon">🔒</span>
                   <div className="banner-text">Una vez enviada, la predicción <strong className="text-highlight">NO se puede cambiar</strong>.</div>
                 </div>
+                
+                <div className="search-filter-bar">
+                  <input 
+                    type="text" 
+                    placeholder="🔍 Buscar país (ej: México)..." 
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    className="search-input"
+                  />
+                  <select 
+                    value={statusFilter} 
+                    onChange={e => setStatusFilter(e.target.value)}
+                    className="filter-select"
+                  >
+                    <option value="all">Todos los partidos</option>
+                    <option value="pending">⏳ Pendientes</option>
+                    <option value="locked">🔒 Enviados</option>
+                    <option value="finished">✅ Finalizados</option>
+                  </select>
+                </div>
+
                 <GF gs={GS} sel={grp} set={setGrp}/>
                 <div className="fixtures-list">
-                  {fm.map(match=>{
+                  {filteredMatches.map(match=>{
                     const pred=getPred(match.id), locked=!!pred, draft=drafts[match.id]||{}, finished=match.is_finished;
                     let pts=null; if(finished&&pred) pts=calcPts(pred.pred_home,pred.pred_away,match.score_home,match.score_away);
                     
@@ -489,7 +612,7 @@ export default function App() {
                       </div>
                     );
                   })}
-                  {!fm.length&&<div className="no-data">No hay partidos en este grupo</div>}
+                  {!filteredMatches.length&&<div className="no-data">No se encontraron partidos</div>}
                 </div>
               </div>
             )}
@@ -591,9 +714,20 @@ export default function App() {
         {view==="results"&&(
           <div className="view-results fade-in">
             <h3 className="section-title text-bebas">📊 RESULTADOS</h3>
+            
+            <div className="search-filter-bar">
+              <input 
+                type="text" 
+                placeholder="🔍 Buscar país..." 
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="search-input"
+              />
+            </div>
+
             <GF gs={GS} sel={grp} set={setGrp}/>
             <div className="fixtures-list">
-              {fm.map(m=>{
+              {filteredMatches.map(m=>{
                 let cardClass = "match-card";
                 if(m.is_finished){
                   cardClass += " match-card-locked";
@@ -637,7 +771,7 @@ export default function App() {
                   </div>
                 );
               })}
-              {!fm.length&&<div className="no-data">No hay partidos en este grupo</div>}
+              {!filteredMatches.length&&<div className="no-data">No se encontraron partidos</div>}
             </div>
           </div>
         )}
@@ -684,10 +818,110 @@ export default function App() {
                       <div className="dashboard-lbl">PREDICCIONES</div>
                     </div>
                   </div>
+                  
+                  <div className="search-filter-bar">
+                    <input 
+                      type="text" 
+                      placeholder="🔍 Buscar país..." 
+                      value={searchQuery}
+                      onChange={e => setSearchQuery(e.target.value)}
+                      className="search-input"
+                    />
+                  </div>
+
+                  {selectedPart.id !== user.id && (
+                    <div className="compare-toggle-row">
+                      <button onClick={() => setCompareMode(!compareMode)} className={`btn-tab-pill ${compareMode ? 'active' : ''}`}>
+                        ⚔️ {compareMode ? "Desactivar comparación" : "Comparar conmigo"}
+                      </button>
+                    </div>
+                  )}
+
                   <GF gs={GS} sel={grp} set={setGrp}/>
                   <div className="fixtures-list">
-                    {fm.map(match=>{
+                    {filteredMatches.map(match=>{
                       const pred = partPreds.find(pr=>pr.match_id===match.id);
+                      
+                      // COMPARISON MODE RENDERING
+                      if (compareMode) {
+                        const predMine = preds.find(pr=>pr.match_id===match.id);
+                        const draftMine = drafts[match.id];
+                        
+                        const scoreS = pred ? `${pred.pred_home} - ${pred.pred_away}` : "- : -";
+                        let scoreM = "- : -";
+                        let hasMyPred = false;
+                        let myHome = null;
+                        let myAway = null;
+                        
+                        if (predMine) {
+                          scoreM = `${predMine.pred_home} - ${predMine.pred_away}`;
+                          hasMyPred = true;
+                          myHome = predMine.pred_home;
+                          myAway = predMine.pred_away;
+                        } else if (draftMine && draftMine.home !== undefined && draftMine.home !== "" && draftMine.away !== undefined && draftMine.away !== "") {
+                          scoreM = `${draftMine.home} - ${draftMine.away} (Draft)`;
+                          hasMyPred = true;
+                          myHome = parseInt(draftMine.home);
+                          myAway = parseInt(draftMine.away);
+                        }
+                        
+                        let compClass = "match-card-conflict";
+                        let compBadgeText = "Diferente";
+                        let compBadgeClass = "badge-danger";
+                        
+                        if (!pred || !hasMyPred) {
+                          compClass = "";
+                          compBadgeText = "Sin predicción";
+                          compBadgeClass = "badge-neutral";
+                        } else {
+                          const sameScore = pred.pred_home === myHome && pred.pred_away === myAway;
+                          const outcomeS = pred.pred_home > pred.pred_away ? "H" : pred.pred_home < pred.pred_away ? "A" : "D";
+                          const outcomeM = myHome > myAway ? "H" : myHome < myAway ? "A" : "D";
+                          const sameOutcome = outcomeS === outcomeM;
+                          
+                          if (sameScore) {
+                            compClass = "match-card-exact-match";
+                            compBadgeText = "🎯 Coincidencia Exacta";
+                            compBadgeClass = "badge-success";
+                          } else if (sameOutcome) {
+                            compClass = "match-card-outcome-match";
+                            compBadgeText = "🔵 Mismo Ganador";
+                            compBadgeClass = "badge-info";
+                          }
+                        }
+                        
+                        return (
+                          <div key={match.id} className={`match-card ${compClass}`}>
+                            <div className="match-card-header">
+                              <span className="match-meta">Grupo {match.group_name} · #{match.match_number} · {match.match_date}</span>
+                              <span className={`badge ${compBadgeClass}`}>{compBadgeText}</span>
+                            </div>
+                            <div className="comparison-fixture-row">
+                              <div className="comparison-team-side">
+                                <span className="team-name">{match.team_home}</span>
+                                <span className="flag-emoji large">{gf(match.team_home)}</span>
+                              </div>
+                              <div className="comparison-vs-badge">VS</div>
+                              <div className="comparison-team-side text-left">
+                                <span className="flag-emoji large">{gf(match.team_away)}</span>
+                                <span className="team-name">{match.team_away}</span>
+                              </div>
+                            </div>
+                            <div className="comparison-predictions-grid">
+                              <div className="comparison-user-prediction">
+                                <div className="comparison-user-name">{selectedPart.name}</div>
+                                <div className="comparison-score text-bebas" style={{ color: "var(--accent)" }}>{scoreS}</div>
+                              </div>
+                              <div className="comparison-user-prediction my-prediction-column">
+                                <div className="comparison-user-name">Tú</div>
+                                <div className="comparison-score text-bebas" style={{ color: predMine ? "var(--green)" : "var(--accent)" }}>{scoreM}</div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      // STANDARD VIEW RENDERING
                       if(!pred) return(
                         <div key={match.id} className="match-card match-card-finished opacity-60">
                           <div className="match-card-header">
@@ -750,6 +984,7 @@ export default function App() {
                       );
                     })}
                   </div>
+                  {!filteredMatches.length&&<div className="no-data">No se encontraron partidos</div>}
                 </div>
               );
             })():(

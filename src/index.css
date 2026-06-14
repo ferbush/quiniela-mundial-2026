@@ -1214,3 +1214,124 @@ body {
     font-size: 24px;
   }
 }
+
+/* Search & Filter Bar */
+.search-filter-bar {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+.search-input {
+  flex: 1;
+  min-width: 200px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: rgba(15, 23, 42, 0.7);
+  color: var(--text);
+  outline: none;
+  font-size: 14px;
+  transition: all 0.2s ease;
+}
+.search-input:focus {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.15);
+}
+.filter-select {
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: rgba(15, 23, 42, 0.7);
+  color: var(--text);
+  outline: none;
+  font-size: 14px;
+  cursor: pointer;
+  min-width: 170px;
+  transition: border-color 0.2s ease;
+}
+.filter-select:focus {
+  border-color: var(--border-focus);
+}
+
+.compare-toggle-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 16px;
+}
+
+/* Side-by-Side Comparison styles */
+.comparison-fixture-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  padding-bottom: 8px;
+}
+.comparison-team-side {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+.comparison-team-side.text-left {
+  justify-content: flex-end;
+  text-align: right;
+}
+.comparison-vs-badge {
+  color: var(--text-dim);
+  font-size: 10px;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin: 0 10px;
+  flex-shrink: 0;
+}
+
+.comparison-predictions-grid {
+  display: flex;
+  gap: 8px;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.03);
+}
+.comparison-user-prediction {
+  flex: 1;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+.my-prediction-column {
+  border-left: 1px solid var(--border);
+}
+.comparison-user-name {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+.comparison-score {
+  font-size: 22px;
+  line-height: 1.1;
+}
+
+/* Outcome Highlight Card Styles */
+.match-card-exact-match {
+  border-color: rgba(16, 185, 129, 0.35);
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.04) 0%, rgba(22, 28, 45, 0.55) 100%);
+  box-shadow: 0 4px 15px rgba(16, 185, 129, 0.04);
+}
+.match-card-outcome-match {
+  border-color: rgba(59, 130, 246, 0.35);
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.04) 0%, rgba(22, 28, 45, 0.55) 100%);
+  box-shadow: 0 4px 15px rgba(59, 130, 246, 0.04);
+}
+.match-card-conflict {
+  border-color: rgba(239, 68, 68, 0.15);
+}
