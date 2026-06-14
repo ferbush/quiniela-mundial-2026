@@ -28,6 +28,20 @@ const FL = {
 const gf = t => FL[t]||"🏳️";
 
 function calcPts(ph,pa,rh,ra){ if(rh===null||ra===null) return 0; if(ph===rh&&pa===ra) return 5; const p=ph>pa?"H":ph<pa?"A":"D", r=rh>ra?"H":rh<ra?"A":"D"; return p===r?3:0; }
+
+const normalizeTeamName = (name) => {
+  if (!name) return "";
+  let n = name.trim().toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/\band\b/g, "&")
+    .replace(/-/g, " ")
+    .replace(/\s+/g, " ");
+  if (n === "czech republic" || n === "czechia") return "czechia";
+  if (n === "bosnia & herzegovina" || n === "bosnia herzegovina") return "bosnia herzegovina";
+  if (n === "democratic republic of the congo" || n === "dr congo" || n === "congo dr") return "dr congo";
+  if (n === "cote d ivoire" || n === "ivory coast") return "ivory coast";
+  return n;
+};
 function triggerConfetti() {
   const canvas = document.createElement("canvas");
   canvas.style.position = "fixed";
@@ -241,29 +255,46 @@ export default function App() {
     try {
       const finishedApiMatches = apiMatches.filter(m => m.finished === "TRUE");
       for (const apiM of finishedApiMatches) {
-        const dbM = matches.find(m => String(m.match_number) === String(apiM.id));
+        // Find matching db match by team names (group stage matches)
+        const dbM = matches.find(dbMatch => {
+          const apiHome = normalizeTeamName(apiM.home_team_name_en);
+          const apiAway = normalizeTeamName(apiM.away_team_name_en);
+          const dbHome = normalizeTeamName(dbMatch.team_home);
+          const dbAway = normalizeTeamName(dbMatch.team_away);
+          return (apiHome === dbHome && apiAway === dbAway) || (apiHome === dbAway && apiAway === dbHome);
+        });
+
         if (dbM) {
-          const apiScoreHome = parseInt(apiM.home_score);
-          const apiScoreAway = parseInt(apiM.away_score);
-          if (!dbM.is_finished || dbM.score_home !== apiScoreHome || dbM.score_away !== apiScoreAway) {
-            await supa(`matches?id=eq.${dbM.id}`, {
-              method: "PATCH",
-              headers: { ...hdrs, Prefer: "return=representation" },
-              body: JSON.stringify({
-                score_home: apiScoreHome,
-                score_away: apiScoreAway,
-                is_finished: true
-              })
-            });
-            const freshPreds = await supa(`predictions?match_id=eq.${dbM.id}`);
-            for (const pr of (freshPreds || [])) {
-              const pts = calcPts(pr.pred_home, pr.pred_away, apiScoreHome, apiScoreAway);
-              await supa(`predictions?id=eq.${pr.id}`, {
+          const apiHomeScore = apiM.home_score !== null && apiM.home_score !== "null" ? parseInt(apiM.home_score) : null;
+          const apiAwayScore = apiM.away_score !== null && apiM.away_score !== "null" ? parseInt(apiM.away_score) : null;
+          
+          // Determine if team order is flipped in the API compared to database
+          const isFlipped = normalizeTeamName(apiM.home_team_name_en) === normalizeTeamName(dbM.team_away);
+          
+          const homeScore = isFlipped ? apiAwayScore : apiHomeScore;
+          const awayScore = isFlipped ? apiHomeScore : apiAwayScore;
+
+          if (homeScore !== null && awayScore !== null) {
+            if (!dbM.is_finished || dbM.score_home !== homeScore || dbM.score_away !== awayScore) {
+              await supa(`matches?id=eq.${dbM.id}`, {
                 method: "PATCH",
-                body: JSON.stringify({ points_earned: pts })
+                headers: { ...hdrs, Prefer: "return=representation" },
+                body: JSON.stringify({
+                  score_home: homeScore,
+                  score_away: awayScore,
+                  is_finished: true
+                })
               });
+              const freshPreds = await supa(`predictions?match_id=eq.${dbM.id}`);
+              for (const pr of (freshPreds || [])) {
+                const pts = calcPts(pr.pred_home, pr.pred_away, homeScore, awayScore);
+                await supa(`predictions?id=eq.${pr.id}`, {
+                  method: "PATCH",
+                  body: JSON.stringify({ points_earned: pts })
+                });
+              }
+              updatedMatchesCount++;
             }
-            updatedMatchesCount++;
           }
         }
       }
@@ -283,20 +314,43 @@ export default function App() {
   };
 
   const mergedMatches = matches.map(dbMatch => {
-    const apiMatch = apiMatches.find(m => String(m.id) === String(dbMatch.match_number));
+    if (dbMatch.is_finished) {
+      return {
+        ...dbMatch,
+        is_live: false,
+        time_elapsed: "finished"
+      };
+    }
+    // Find matching API match by team names
+    const apiMatch = apiMatches.find(m => {
+      const apiHome = normalizeTeamName(m.home_team_name_en);
+      const apiAway = normalizeTeamName(m.away_team_name_en);
+      const dbHome = normalizeTeamName(dbMatch.team_home);
+      const dbAway = normalizeTeamName(dbMatch.team_away);
+      return (apiHome === dbHome && apiAway === dbAway) || (apiHome === dbAway && apiAway === dbHome);
+    });
+
     if (apiMatch && autoSync) {
       const apiFinished = apiMatch.finished === "TRUE";
       const apiLive = !apiFinished && apiMatch.time_elapsed !== "notstarted" && apiMatch.time_elapsed !== "finished";
-      const homeScore = (apiFinished || apiLive) && apiMatch.home_score !== null && apiMatch.home_score !== "null" ? parseInt(apiMatch.home_score) : null;
-      const awayScore = (apiFinished || apiLive) && apiMatch.away_score !== null && apiMatch.away_score !== "null" ? parseInt(apiMatch.away_score) : null;
-      return {
-        ...dbMatch,
-        score_home: homeScore !== null ? homeScore : dbMatch.score_home,
-        score_away: awayScore !== null ? awayScore : dbMatch.score_away,
-        is_finished: apiFinished,
-        is_live: apiLive,
-        time_elapsed: apiMatch.time_elapsed
-      };
+      const apiHomeScore = apiMatch.home_score !== null && apiMatch.home_score !== "null" ? parseInt(apiMatch.home_score) : null;
+      const apiAwayScore = apiMatch.away_score !== null && apiMatch.away_score !== "null" ? parseInt(apiMatch.away_score) : null;
+      
+      const isFlipped = normalizeTeamName(apiMatch.home_team_name_en) === normalizeTeamName(dbMatch.team_away);
+      
+      const homeScore = isFlipped ? apiAwayScore : apiHomeScore;
+      const awayScore = isFlipped ? apiHomeScore : apiAwayScore;
+
+      if (apiFinished || apiLive) {
+        return {
+          ...dbMatch,
+          score_home: homeScore !== null ? homeScore : dbMatch.score_home,
+          score_away: awayScore !== null ? awayScore : dbMatch.score_away,
+          is_finished: apiFinished,
+          is_live: apiLive,
+          time_elapsed: apiMatch.time_elapsed
+        };
+      }
     }
     return {
       ...dbMatch,
@@ -524,7 +578,16 @@ export default function App() {
                   Tabla Oficial
                 </button>
               </div>
-              <div className="sync-status-indicator">
+              <div className="sync-status-indicator" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <label style={{ display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: "12px", borderRight: "1px solid var(--border)", paddingRight: "10px" }}>
+                  <input 
+                    type="checkbox" 
+                    checked={autoSync} 
+                    onChange={e => setAutoSync(e.target.checked)} 
+                    style={{ cursor: "pointer" }}
+                  />
+                  <span>API en Vivo</span>
+                </label>
                 {isSyncing ? (
                   <span className="sync-spinner">🔄 Sincronizando...</span>
                 ) : lastSync ? (
