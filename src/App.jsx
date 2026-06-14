@@ -29,8 +29,8 @@ const gf = t => FL[t]||"🏳️";
 
 function calcPts(ph,pa,rh,ra){ if(rh===null||ra===null) return 0; if(ph===rh&&pa===ra) return 5; const p=ph>pa?"H":ph<pa?"A":"D", r=rh>ra?"H":rh<ra?"A":"D"; return p===r?3:0; }
 
-const C = { bg:"#0a0e1a",card:"#111827",accent:"#f59e0b",accentDk:"#d97706",green:"#10b981",red:"#ef4444",blue:"#3b82f6",text:"#f1f5f9",dim:"#94a3b8",bdr:"#1e293b",gold:"#fbbf24",silver:"#9ca3af",bronze:"#cd7f32",srf:"#0f172a" };
-const fonts = `@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500;600;700&display=swap');`;
+
+
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -178,40 +178,48 @@ export default function App() {
     return thirds.sort((a, b) => b.pts - a.pts || (b.gf - b.gc) - (a.gf - a.gc) || b.gf - a.gf);
   };
 
-  if(loading) return(<div style={{background:C.bg,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}}><style>{fonts}</style><div style={{textAlign:"center"}}><div style={{fontSize:48,marginBottom:16}}>⚽</div><div style={{color:C.accent,fontFamily:"Bebas Neue",fontSize:24,letterSpacing:2}}>CARGANDO...</div></div></div>);
+  if(loading) return(
+    <div className="loading-screen">
+      <div className="loading-content">
+        <div className="loading-icon">⚽</div>
+        <div className="loading-text text-bebas">CARGANDO...</div>
+      </div>
+    </div>
+  );
 
   // LOGIN
   if(!user) return(
-    <div style={{background:`linear-gradient(135deg,${C.bg} 0%,#1a1040 100%)`,minHeight:"100vh",fontFamily:"DM Sans"}}>
-      <style>{fonts}</style>
-      <div style={{maxWidth:420,margin:"0 auto",padding:"40px 20px"}}>
-        <div style={{textAlign:"center",marginBottom:40}}>
-          <div style={{fontSize:64,marginBottom:8}}>🏆</div>
-          <h1 style={{fontFamily:"Bebas Neue",fontSize:42,color:C.accent,letterSpacing:3,margin:0}}>QUINIELA</h1>
-          <h2 style={{fontFamily:"Bebas Neue",fontSize:28,color:C.text,letterSpacing:2,margin:0,fontWeight:400}}>MUNDIAL 2026</h2>
-          <div style={{color:C.dim,fontSize:13,marginTop:12}}>🇺🇸 🇨🇦 🇲🇽 USA · Canadá · México</div>
+    <div className="login-page">
+      <div className="ambient-glow-1"></div>
+      <div className="ambient-glow-2"></div>
+      <div className="login-container fade-in">
+        <div className="login-header">
+          <div className="login-logo">🏆</div>
+          <h1 className="login-title text-bebas">QUINIELA</h1>
+          <h2 className="login-subtitle text-bebas">MUNDIAL 2026</h2>
+          <div className="login-locations">🇺🇸 🇨🇦 🇲🇽 USA · Canadá · México</div>
         </div>
         {err&&<Msg t="e">{err}</Msg>}{ok&&<Msg t="s">{ok}</Msg>}
         {view!=="register"?(
-          <div style={crd}>
-            <h3 style={{color:C.text,margin:"0 0 20px",fontWeight:600}}>Iniciar Sesión</h3>
-            <input placeholder="Tu nombre" value={lName} onChange={e=>setLName(e.target.value)} style={inp}/>
-            <input placeholder="PIN (4 dígitos)" type="password" maxLength={4} value={lPin} onChange={e=>setLPin(e.target.value)} style={inp} onKeyDown={e=>e.key==="Enter"&&login()}/>
-            <button onClick={login} style={btnP}>Entrar</button>
-            <div style={{textAlign:"center",marginTop:16}}><span style={{color:C.dim,fontSize:14}}>¿Primera vez? </span><button onClick={()=>setView("register")} style={lnk}>Registrate</button></div>
+          <div className="glass-card">
+            <h3 className="form-title">Iniciar Sesión</h3>
+            <input placeholder="Tu nombre" value={lName} onChange={e=>setLName(e.target.value)} className="input-field"/>
+            <input placeholder="PIN (4 dígitos)" type="password" maxLength={4} value={lPin} onChange={e=>setLPin(e.target.value)} className="input-field" onKeyDown={e=>e.key==="Enter"&&login()}/>
+            <button onClick={login} className="btn-primary">Entrar</button>
+            <div className="form-footer"><span className="text-dim">¿Primera vez? </span><button onClick={()=>setView("register")} className="btn-link">Registrate</button></div>
           </div>
         ):(
-          <div style={crd}>
-            <h3 style={{color:C.text,margin:"0 0 20px",fontWeight:600}}>Registro</h3>
-            <input placeholder="Tu nombre (único)" value={rName} onChange={e=>setRName(e.target.value)} style={inp}/>
-            <input placeholder="PIN de 4 dígitos" type="password" maxLength={4} value={rPin} onChange={e=>setRPin(e.target.value)} style={inp} onKeyDown={e=>e.key==="Enter"&&register()}/>
-            <button onClick={register} style={btnP}>Registrarme</button>
-            <div style={{textAlign:"center",marginTop:16}}><span style={{color:C.dim,fontSize:14}}>¿Ya tenés cuenta? </span><button onClick={()=>setView("ranking")} style={lnk}>Iniciá sesión</button></div>
+          <div className="glass-card">
+            <h3 className="form-title">Registro</h3>
+            <input placeholder="Tu nombre (único)" value={rName} onChange={e=>setRName(e.target.value)} className="input-field"/>
+            <input placeholder="PIN de 4 dígitos" type="password" maxLength={4} value={rPin} onChange={e=>setRPin(e.target.value)} className="input-field" onKeyDown={e=>e.key==="Enter"&&register()}/>
+            <button onClick={register} className="btn-primary">Registrarme</button>
+            <div className="form-footer"><span className="text-dim">¿Ya tenés cuenta? </span><button onClick={()=>setView("ranking")} className="btn-link">Iniciá sesión</button></div>
           </div>
         )}
-        <div style={{textAlign:"center",marginTop:24,color:C.dim,fontSize:12,lineHeight:1.8}}>
-          ⚽ Acertar ganador/empate = <span style={{color:C.blue,fontWeight:600}}>3 pts</span><br/>
-          🎯 Marcador exacto = <span style={{color:C.green,fontWeight:600}}>5 pts</span><br/>
+        <div className="login-rules">
+          ⚽ Acertar ganador/empate = <span className="text-blue">3 pts</span><br/>
+          🎯 Marcador exacto = <span className="text-green">5 pts</span><br/>
           🔒 Una vez enviada, la predicción se bloquea
         </div>
       </div>
@@ -220,423 +228,630 @@ export default function App() {
 
   // MAIN
   return(
-    <div style={{background:C.bg,minHeight:"100vh",fontFamily:"DM Sans"}}>
-      <style>{fonts}</style>
+    <div className="app-main-layout">
+      <div className="ambient-glow-1"></div>
+      <div className="ambient-glow-2"></div>
       {/* Header */}
-      <div style={{background:`linear-gradient(135deg,#1a1040 0%,${C.bg} 100%)`,borderBottom:`1px solid ${C.bdr}`,padding:"14px 20px"}}>
-        <div style={{maxWidth:800,margin:"0 auto",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-          <div style={{display:"flex",alignItems:"center",gap:12}}>
-            <span style={{fontSize:26}}>🏆</span>
+      <header className="sticky-header">
+        <div className="header-inner">
+          <div className="header-brand">
+            <span className="header-logo">🏆</span>
             <div>
-              <div style={{fontFamily:"Bebas Neue",fontSize:20,color:C.accent,letterSpacing:2,lineHeight:1}}>QUINIELA MUNDIAL 2026</div>
-              <div style={{color:C.dim,fontSize:12}}>{user.name}{user.is_admin?" 👑 Admin":""}</div>
+              <h1 className="header-title text-bebas">QUINIELA MUNDIAL 2026</h1>
+              <div className="header-user">
+                <span>{user.name}</span>
+                {user.is_admin && <span className="badge-admin">👑 Admin</span>}
+              </div>
             </div>
           </div>
-          <button onClick={()=>{setUser(null);setView("ranking");setPreds([]);setDrafts({});}} style={{background:"none",border:`1px solid ${C.bdr}`,color:C.dim,padding:"6px 12px",borderRadius:8,cursor:"pointer",fontSize:12}}>Salir</button>
+          <button onClick={()=>{setUser(null);setView("ranking");setPreds([]);setDrafts({});}} className="btn-secondary">Salir</button>
         </div>
-      </div>
+      </header>
       {/* Nav */}
-      <div style={{background:C.srf,borderBottom:`1px solid ${C.bdr}`,padding:"0 20px",overflowX:"auto"}}>
-        <div style={{maxWidth:800,margin:"0 auto",display:"flex",gap:0,minWidth:"max-content"}}>
+      <nav className="nav-bar">
+        <div className="nav-inner nav-container">
           {[{id:"ranking",l:"🏅 Ranking",s:true},{id:"predictions",l:"📝 Predicciones",s:true},{id:"groups",l:"⚽ Grupos",s:true},{id:"results",l:"📊 Resultados",s:true},{id:"transparency",l:"👁️ Quinielas",s:true},{id:"admin",l:"👑 Admin",s:user.is_admin}].filter(t=>t.s).map(tab=>(
-            <button key={tab.id} onClick={()=>setView(tab.id)} style={{background:view===tab.id?C.accent+"22":"transparent",border:"none",borderBottom:view===tab.id?`2px solid ${C.accent}`:"2px solid transparent",color:view===tab.id?C.accent:C.dim,padding:"12px 16px",cursor:"pointer",fontSize:14,fontWeight:view===tab.id?600:400,whiteSpace:"nowrap"}}>{tab.l}</button>
+            <button key={tab.id} onClick={()=>setView(tab.id)} className={`nav-btn ${view===tab.id?'active':''}`}>{tab.l}</button>
           ))}
         </div>
-      </div>
-      <div style={{maxWidth:800,margin:"0 auto",padding:"0 20px"}}>{err&&<Msg t="e">{err}</Msg>}{ok&&<Msg t="s">{ok}</Msg>}</div>
-      <div style={{maxWidth:800,margin:"0 auto",padding:"20px 20px 40px"}}>
+      </nav>
+      <div className="main-content">
+        <div className="alerts-container">
+          {err&&<Msg t="e">{err}</Msg>}{ok&&<Msg t="s">{ok}</Msg>}
+        </div>
 
         {/* RANKING */}
-        {view==="ranking"&&(<div>
-          <div style={{...crd,marginBottom:20,padding:20}}>
-            <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
-              <span style={{color:C.dim,fontSize:13}}>Progreso del torneo</span>
-              <span style={{color:C.accent,fontSize:13,fontWeight:600}}>{fin}/{matches.length} partidos</span>
-            </div>
-            <div style={{background:C.bdr,borderRadius:10,height:8,overflow:"hidden"}}>
-              <div style={{background:`linear-gradient(90deg,${C.accent},${C.green})`,width:`${matches.length>0?(fin/matches.length)*100:0}%`,height:"100%",borderRadius:10,transition:"width 0.5s"}}/>
-            </div>
-          </div>
-          <h3 style={{color:C.text,fontFamily:"Bebas Neue",fontSize:24,letterSpacing:1,marginBottom:16}}>🏅 TABLA DE POSICIONES</h3>
-          {ranking.map((p,i)=>(
-            <div key={p.id} style={{background:i===0&&p.pts>0?`linear-gradient(135deg,${C.gold}15,${C.card})`:C.card,borderRadius:12,padding:"14px 16px",marginBottom:8,border:`1px solid ${i===0&&p.pts>0?C.gold+"44":C.bdr}`,display:"flex",alignItems:"center",gap:12}}>
-              <div style={{width:36,height:36,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"Bebas Neue",fontSize:18,flexShrink:0,background:i===0?C.gold+"33":i===1?C.silver+"33":i===2?C.bronze+"33":C.bdr,color:i===0?C.gold:i===1?C.silver:i===2?C.bronze:C.dim}}>{i+1}</div>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{color:C.text,fontWeight:600,fontSize:15,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.name}{p.id===user.id?<span style={{color:C.accent,fontSize:12}}> (tú)</span>:""}</div>
-                <div style={{color:C.dim,fontSize:12}}>{p.ex} exactos · {p.ac} aciertos · {p.tp} pred.</div>
+        {view==="ranking"&&(
+          <div className="view-ranking fade-in">
+            <div className="glass-card progress-card">
+              <div className="progress-details">
+                <span className="text-dim text-sm">Progreso del torneo</span>
+                <span className="progress-count text-bebas">{fin}/{matches.length} partidos</span>
               </div>
-              <div style={{textAlign:"right",flexShrink:0}}>
-                <div style={{fontFamily:"Bebas Neue",fontSize:28,color:i===0&&p.pts>0?C.gold:C.accent}}>{p.pts}</div>
-                <div style={{color:C.dim,fontSize:11}}>PTS</div>
+              <div className="progress-bar-container">
+                <div className="progress-bar-fill" style={{width:`${matches.length>0?(fin/matches.length)*100:0}%`}}/>
               </div>
             </div>
-          ))}
-          {!ranking.length&&<div style={{textAlign:"center",color:C.dim,padding:40}}>Sin participantes aún</div>}
-        </div>)}
+            <h3 className="section-title text-bebas">🏅 TABLA DE POSICIONES</h3>
+            <div className="ranking-list">
+              {ranking.map((p,i)=>{
+                const isTop1 = i===0&&p.pts>0;
+                const isTop2 = i===1&&p.pts>0;
+                const isTop3 = i===2&&p.pts>0;
+                let rankClass = "ranking-item";
+                if(isTop1) rankClass += " ranking-item-top1";
+                else if(isTop2) rankClass += " ranking-item-top2";
+                else if(isTop3) rankClass += " ranking-item-top3";
+                
+                let badgeClass = "rank-badge";
+                if(i===0) badgeClass += " rank-badge-1";
+                else if(i===1) badgeClass += " rank-badge-2";
+                else if(i===2) badgeClass += " rank-badge-3";
 
-        {/* PREDICTIONS */}
-        {view==="predictions"&&(<div>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:8}}>
-            <h3 style={{color:C.text,fontFamily:"Bebas Neue",fontSize:24,letterSpacing:1,margin:0}}>📝 MIS PREDICCIONES</h3>
-            {pendN>0&&<button onClick={submitAll} disabled={sending} style={{background:C.green,color:"#fff",border:"none",borderRadius:10,padding:"8px 18px",cursor:"pointer",fontSize:13,fontWeight:600,opacity:sending?0.5:1}}>{sending?"Enviando...":`Enviar todas (${pendN}) 🔒`}</button>}
-          </div>
-
-          {/* Sub-tabs: Predictions vs Simulated Table */}
-          <div style={{display:"flex",gap:8,marginBottom:16}}>
-            <button onClick={()=>setShowSim(false)} style={{background:!showSim?C.accent:C.card,color:!showSim?C.bg:C.dim,border:`1px solid ${!showSim?C.accent:C.bdr}`,borderRadius:10,padding:"8px 16px",cursor:"pointer",fontSize:13,fontWeight:600}}>📝 Mis predicciones</button>
-            <button onClick={()=>setShowSim(true)} style={{background:showSim?C.accent:C.card,color:showSim?C.bg:C.dim,border:`1px solid ${showSim?C.accent:C.bdr}`,borderRadius:10,padding:"8px 16px",cursor:"pointer",fontSize:13,fontWeight:600}}>📊 Mi tabla simulada</button>
-          </div>
-
-          {/* SIMULATED TABLE VIEW */}
-          {showSim?(<div>
-            <div style={{background:C.card,borderRadius:10,padding:"10px 14px",marginBottom:16,border:`1px solid ${C.bdr}`}}>
-              <div style={{color:C.dim,fontSize:12,lineHeight:1.6}}>📊 Así quedarían los grupos según <strong style={{color:C.accent}}>tus predicciones</strong>. Se actualiza conforme llenás resultados.</div>
-            </div>
-            {["A","B","C","D","E","F","G","H","I","J","K","L"].map(g=>{
-              const standings = getGroupStandingsPred(g);
-              const predsInGroup = matches.filter(m=>m.group_name===g).filter(m=>preds.some(p=>p.match_id===m.id)||drafts[m.id]).length;
-              return(
-                <div key={g} style={{...crd,marginBottom:16,padding:0,overflow:"hidden"}}>
-                  <div style={{background:C.blue+"18",padding:"10px 16px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                    <span style={{fontFamily:"Bebas Neue",fontSize:18,color:C.blue,letterSpacing:2}}>GRUPO {g}</span>
-                    <span style={{color:C.dim,fontSize:11}}>{predsInGroup}/6 predicciones</span>
-                  </div>
-                  <div style={{overflowX:"auto"}}>
-                    <table style={{width:"100%",borderCollapse:"collapse",minWidth:480}}>
-                      <thead><tr style={{borderBottom:`1px solid ${C.bdr}`}}>
-                        <th style={{...th,textAlign:"left",paddingLeft:16,width:"40%"}}>Equipo</th>
-                        <th style={th}>PJ</th><th style={th}>G</th><th style={th}>E</th><th style={th}>P</th>
-                        <th style={th}>GF</th><th style={th}>GC</th><th style={th}>DIF</th>
-                        <th style={{...th,color:C.blue}}>PTS</th>
-                      </tr></thead>
-                      <tbody>{standings.map((t,i)=>(
-                        <tr key={t.name} style={{borderBottom:`1px solid ${C.bdr}`,background:i<2?C.blue+"08":"transparent"}}>
-                          <td style={{padding:"10px 16px",color:C.text,fontSize:14,fontWeight:500}}>
-                            <span style={{display:"inline-flex",alignItems:"center",gap:8}}>
-                              {i<2&&<span style={{width:6,height:6,borderRadius:"50%",background:C.blue,display:"inline-block",flexShrink:0}}/>}
-                              {gf(t.name)} {t.name}
-                            </span>
-                          </td>
-                          <td style={td}>{t.pj}</td><td style={td}>{t.g}</td><td style={td}>{t.e}</td><td style={td}>{t.p}</td>
-                          <td style={td}>{t.gf}</td><td style={td}>{t.gc}</td>
-                          <td style={{...td,color:t.gf-t.gc>0?C.green:t.gf-t.gc<0?C.red:C.dim}}>{t.gf-t.gc>0?"+":""}{t.gf-t.gc}</td>
-                          <td style={{...td,color:C.blue,fontWeight:700,fontFamily:"Bebas Neue",fontSize:18}}>{t.pts}</td>
-                        </tr>
-                      ))}</tbody>
-                    </table>
-                  </div>
-                </div>
-              );
-            })}
-            {/* Simulated best thirds */}
-            {(()=>{const bt=getBestThirds(getGroupStandingsPred);return bt.length>0?(
-              <div style={{...crd,marginBottom:16,padding:0,overflow:"hidden"}}>
-                <div style={{background:C.accent+"18",padding:"10px 16px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                  <span style={{fontFamily:"Bebas Neue",fontSize:18,color:C.accent,letterSpacing:2}}>MEJORES TERCEROS</span>
-                  <span style={{color:C.dim,fontSize:11}}>Clasifican los 8 mejores</span>
-                </div>
-                <div style={{overflowX:"auto"}}>
-                  <table style={{width:"100%",borderCollapse:"collapse",minWidth:480}}>
-                    <thead><tr style={{borderBottom:`1px solid ${C.bdr}`}}>
-                      <th style={{...th,textAlign:"left",paddingLeft:16}}>Grupo</th>
-                      <th style={{...th,textAlign:"left"}}>Equipo</th>
-                      <th style={th}>PJ</th><th style={th}>G</th><th style={th}>E</th><th style={th}>P</th>
-                      <th style={th}>GF</th><th style={th}>GC</th><th style={th}>DIF</th>
-                      <th style={{...th,color:C.accent}}>PTS</th>
-                    </tr></thead>
-                    <tbody>{bt.map((t,i)=>(
-                      <tr key={t.name} style={{borderBottom:`1px solid ${C.bdr}`,background:i<8?C.accent+"08":"transparent",opacity:i>=8?0.5:1}}>
-                        <td style={{padding:"10px 16px",color:C.accent,fontSize:14,fontWeight:600}}>{t.group}</td>
-                        <td style={{padding:"10px 8px",color:C.text,fontSize:14,fontWeight:500}}>
-                          <span style={{display:"inline-flex",alignItems:"center",gap:6}}>
-                            {i<8&&<span style={{width:6,height:6,borderRadius:"50%",background:C.accent,display:"inline-block",flexShrink:0}}/>}
-                            {gf(t.name)} {t.name}
-                          </span>
-                        </td>
-                        <td style={td}>{t.pj}</td><td style={td}>{t.g}</td><td style={td}>{t.e}</td><td style={td}>{t.p}</td>
-                        <td style={td}>{t.gf}</td><td style={td}>{t.gc}</td>
-                        <td style={{...td,color:t.gf-t.gc>0?C.green:t.gf-t.gc<0?C.red:C.dim}}>{t.gf-t.gc>0?"+":""}{t.gf-t.gc}</td>
-                        <td style={{...td,color:C.accent,fontWeight:700,fontFamily:"Bebas Neue",fontSize:18}}>{t.pts}</td>
-                      </tr>
-                    ))}</tbody>
-                  </table>
-                </div>
-              </div>
-            ):null;})()}
-          </div>):(<div>
-
-          {/* NORMAL PREDICTIONS LIST */}
-          <div style={{background:C.card,borderRadius:10,padding:"10px 14px",marginBottom:16,border:`1px solid ${C.bdr}`}}>
-            <div style={{color:C.dim,fontSize:12,lineHeight:1.6}}>🔒 <strong style={{color:C.accent}}>Importante:</strong> Una vez enviada, la predicción NO se puede cambiar.</div>
-          </div>
-          <GF gs={GS} sel={grp} set={setGrp}/>
-          {fm.map(match=>{
-            const pred=getPred(match.id), locked=!!pred, draft=drafts[match.id]||{}, finished=match.is_finished;
-            let pts=null; if(finished&&pred) pts=calcPts(pred.pred_home,pred.pred_away,match.score_home,match.score_away);
-            const bg=finished?(pts===5?C.green+"11":pts===3?C.blue+"11":pred?C.red+"11":C.card):C.card;
-            const bd=finished?(pts===5?C.green+"44":pts===3?C.blue+"44":pred?C.red+"44":C.bdr):locked?C.green+"33":C.bdr;
-            return(
-              <div key={match.id} style={{background:bg,borderRadius:12,padding:16,marginBottom:8,border:`1px solid ${bd}`}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-                  <span style={{color:C.dim,fontSize:12}}>Grupo {match.group_name} · #{match.match_number} · {match.match_date}</span>
-                  {finished&&pts!==null&&<span style={{background:(pts===5?C.green:pts===3?C.blue:C.red)+"33",color:pts===5?C.green:pts===3?C.blue:C.red,padding:"2px 8px",borderRadius:6,fontSize:11,fontWeight:700}}>{pts===5?"🎯 EXACTO +5":pts===3?"✓ +3":"✗ 0"}</span>}
-                  {!finished&&locked&&<span style={{color:C.green,fontSize:11,fontWeight:600}}>🔒 Enviado</span>}
-                </div>
-                <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
-                  <div style={{textAlign:"right",flex:1,minWidth:0}}><div style={{color:C.text,fontSize:14,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{gf(match.team_home)} {match.team_home}</div></div>
-                  {locked?(<div style={{fontFamily:"Bebas Neue",fontSize:24,color:C.accent,minWidth:60,textAlign:"center"}}>{pred.pred_home} - {pred.pred_away}</div>
-                  ):(<div style={{display:"flex",alignItems:"center",gap:4}}>
-                    <input type="number" min="0" max="20" value={draft.home??""} onChange={e=>updDraft(match.id,"home",e.target.value)} style={si} placeholder="-"/>
-                    <span style={{color:C.dim,fontWeight:700,fontSize:16}}>:</span>
-                    <input type="number" min="0" max="20" value={draft.away??""} onChange={e=>updDraft(match.id,"away",e.target.value)} style={si} placeholder="-"/>
-                  </div>)}
-                  <div style={{textAlign:"left",flex:1,minWidth:0}}><div style={{color:C.text,fontSize:14,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{match.team_away} {gf(match.team_away)}</div></div>
-                </div>
-                {finished&&<div style={{textAlign:"center",marginTop:8,color:C.dim,fontSize:12}}>Real: <span style={{color:C.accent,fontWeight:700}}>{match.score_home} - {match.score_away}</span></div>}
-                {!locked&&draft.home!==undefined&&draft.home!==""&&draft.away!==undefined&&draft.away!==""&&(
-                  <div style={{textAlign:"center",marginTop:10}}><button onClick={()=>submitOne(match.id)} style={{background:C.accent,color:C.bg,border:"none",borderRadius:8,padding:"6px 18px",cursor:"pointer",fontSize:13,fontWeight:600}}>Enviar 🔒</button></div>
-                )}
-              </div>
-            );
-          })}
-        </div>)}</div>)}
-
-        {/* GROUPS STANDINGS */}
-        {view==="groups"&&(<div>
-          <h3 style={{color:C.text,fontFamily:"Bebas Neue",fontSize:24,letterSpacing:1,marginBottom:16}}>⚽ TABLA DE GRUPOS</h3>
-          <p style={{color:C.dim,fontSize:13,marginBottom:20}}>Posiciones actualizadas en base a los resultados reales</p>
-          {["A","B","C","D","E","F","G","H","I","J","K","L"].map(g=>{
-            const standings = getGroupStandings(g);
-            const groupFinished = matches.filter(m=>m.group_name===g&&m.is_finished).length;
-            return(
-              <div key={g} style={{...crd,marginBottom:16,padding:0,overflow:"hidden"}}>
-                <div style={{background:C.accent+"18",padding:"10px 16px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                  <span style={{fontFamily:"Bebas Neue",fontSize:18,color:C.accent,letterSpacing:2}}>GRUPO {g}</span>
-                  <span style={{color:C.dim,fontSize:11}}>{groupFinished}/6 partidos</span>
-                </div>
-                <div style={{overflowX:"auto"}}>
-                  <table style={{width:"100%",borderCollapse:"collapse",minWidth:480}}>
-                    <thead>
-                      <tr style={{borderBottom:`1px solid ${C.bdr}`}}>
-                        <th style={{...th,textAlign:"left",paddingLeft:16,width:"40%"}}>Equipo</th>
-                        <th style={th}>PJ</th><th style={th}>G</th><th style={th}>E</th><th style={th}>P</th>
-                        <th style={th}>GF</th><th style={th}>GC</th><th style={th}>DIF</th>
-                        <th style={{...th,color:C.accent}}>PTS</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {standings.map((t,i)=>(
-                        <tr key={t.name} style={{borderBottom:`1px solid ${C.bdr}`,background:i<2?C.green+"08":"transparent"}}>
-                          <td style={{padding:"10px 16px",color:C.text,fontSize:14,fontWeight:500}}>
-                            <span style={{display:"inline-flex",alignItems:"center",gap:8}}>
-                              {i<2&&<span style={{width:6,height:6,borderRadius:"50%",background:C.green,display:"inline-block",flexShrink:0}}/>}
-                              {gf(t.name)} {t.name}
-                            </span>
-                          </td>
-                          <td style={td}>{t.pj}</td><td style={td}>{t.g}</td><td style={td}>{t.e}</td><td style={td}>{t.p}</td>
-                          <td style={td}>{t.gf}</td><td style={td}>{t.gc}</td>
-                          <td style={{...td,color:t.gf-t.gc>0?C.green:t.gf-t.gc<0?C.red:C.dim}}>{t.gf-t.gc>0?"+":""}{t.gf-t.gc}</td>
-                          <td style={{...td,color:C.accent,fontWeight:700,fontFamily:"Bebas Neue",fontSize:18}}>{t.pts}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                {groupFinished>0&&<div style={{padding:"6px 16px 10px",fontSize:11,color:C.dim}}>🟢 Clasifican los 2 primeros + mejores terceros</div>}
-              </div>
-            );
-          })}
-          {/* Best third-placed teams (real) */}
-          {(()=>{const bt=getBestThirds(getGroupStandings);return bt.length>0?(
-            <div style={{...crd,marginBottom:16,padding:0,overflow:"hidden"}}>
-              <div style={{background:C.accent+"18",padding:"10px 16px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <span style={{fontFamily:"Bebas Neue",fontSize:18,color:C.accent,letterSpacing:2}}>MEJORES TERCEROS</span>
-                <span style={{color:C.dim,fontSize:11}}>Clasifican los 8 mejores</span>
-              </div>
-              <div style={{overflowX:"auto"}}>
-                <table style={{width:"100%",borderCollapse:"collapse",minWidth:480}}>
-                  <thead><tr style={{borderBottom:`1px solid ${C.bdr}`}}>
-                    <th style={{...th,textAlign:"left",paddingLeft:16}}>Grupo</th>
-                    <th style={{...th,textAlign:"left"}}>Equipo</th>
-                    <th style={th}>PJ</th><th style={th}>G</th><th style={th}>E</th><th style={th}>P</th>
-                    <th style={th}>GF</th><th style={th}>GC</th><th style={th}>DIF</th>
-                    <th style={{...th,color:C.accent}}>PTS</th>
-                  </tr></thead>
-                  <tbody>{bt.map((t,i)=>(
-                    <tr key={t.name} style={{borderBottom:`1px solid ${C.bdr}`,background:i<8?C.green+"08":"transparent",opacity:i>=8?0.5:1}}>
-                      <td style={{padding:"10px 16px",color:C.accent,fontSize:14,fontWeight:600}}>{t.group}</td>
-                      <td style={{padding:"10px 8px",color:C.text,fontSize:14,fontWeight:500}}>
-                        <span style={{display:"inline-flex",alignItems:"center",gap:6}}>
-                          {i<8&&<span style={{width:6,height:6,borderRadius:"50%",background:C.green,display:"inline-block",flexShrink:0}}/>}
-                          {gf(t.name)} {t.name}
-                        </span>
-                      </td>
-                      <td style={td}>{t.pj}</td><td style={td}>{t.g}</td><td style={td}>{t.e}</td><td style={td}>{t.p}</td>
-                      <td style={td}>{t.gf}</td><td style={td}>{t.gc}</td>
-                      <td style={{...td,color:t.gf-t.gc>0?C.green:t.gf-t.gc<0?C.red:C.dim}}>{t.gf-t.gc>0?"+":""}{t.gf-t.gc}</td>
-                      <td style={{...td,color:C.accent,fontWeight:700,fontFamily:"Bebas Neue",fontSize:18}}>{t.pts}</td>
-                    </tr>
-                  ))}</tbody>
-                </table>
-              </div>
-            </div>
-          ):null;})()}
-        </div>)}
-
-        {/* RESULTS */}
-        {view==="results"&&(<div>
-          <h3 style={{color:C.text,fontFamily:"Bebas Neue",fontSize:24,letterSpacing:1,marginBottom:16}}>📊 RESULTADOS</h3>
-          <GF gs={GS} sel={grp} set={setGrp}/>
-          {fm.map(m=>(
-            <div key={m.id} style={{background:m.is_finished?C.card:C.srf,borderRadius:12,padding:14,marginBottom:8,border:`1px solid ${m.is_finished?C.green+"33":C.bdr}`,opacity:m.is_finished?1:0.6}}>
-              <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
-                <span style={{color:C.dim,fontSize:12}}>Grupo {m.group_name} · #{m.match_number} · {m.match_date}</span>
-                <span style={{color:m.is_finished?C.green:C.dim,fontSize:11,fontWeight:600}}>{m.is_finished?"✓ FINAL":"Pendiente"}</span>
-              </div>
-              <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:16}}>
-                <div style={{textAlign:"right",flex:1}}><span style={{color:C.text,fontSize:14,fontWeight:500}}>{gf(m.team_home)} {m.team_home}</span></div>
-                <div style={{fontFamily:"Bebas Neue",fontSize:28,color:m.is_finished?C.accent:C.dim,minWidth:70,textAlign:"center"}}>{m.is_finished?`${m.score_home} - ${m.score_away}`:"vs"}</div>
-                <div style={{textAlign:"left",flex:1}}><span style={{color:C.text,fontSize:14,fontWeight:500}}>{m.team_away} {gf(m.team_away)}</span></div>
-              </div>
-            </div>
-          ))}
-        </div>)}
-
-        {/* TRANSPARENCY - ALL PREDICTIONS */}
-        {view==="transparency"&&(<div>
-          <h3 style={{color:C.text,fontFamily:"Bebas Neue",fontSize:24,letterSpacing:1,marginBottom:8}}>👁️ QUINIELAS DE TODOS</h3>
-          <p style={{color:C.dim,fontSize:13,marginBottom:20}}>Consultá las predicciones de cada participante. Solo lectura.</p>
-
-          {/* Participant selector */}
-          <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:20}}>
-            {parts.map(p=>{
-              const pp = allPreds.filter(pr=>pr.participant_id===p.id);
-              return(
-                <button key={p.id} onClick={()=>setSelectedPart(selectedPart?.id===p.id?null:p)} style={{
-                  background:selectedPart?.id===p.id?C.accent:C.card,
-                  color:selectedPart?.id===p.id?C.bg:C.text,
-                  border:`1px solid ${selectedPart?.id===p.id?C.accent:C.bdr}`,
-                  borderRadius:10,padding:"8px 14px",cursor:"pointer",fontSize:14,fontWeight:600,
-                  display:"flex",flexDirection:"column",alignItems:"center",gap:2,
-                }}>
-                  <span>{p.name}{p.id===user.id?" (tú)":""}</span>
-                  <span style={{fontSize:11,fontWeight:400,color:selectedPart?.id===p.id?C.bg+"cc":C.dim}}>{pp.length} pred.</span>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Selected participant predictions */}
-          {selectedPart ? (()=>{
-            const partPreds = allPreds.filter(pr=>pr.participant_id===selectedPart.id);
-            const totalPts = partPreds.reduce((s,pr)=>s+(pr.points_earned||0),0);
-            const exactos = partPreds.filter(pr=>pr.points_earned===5).length;
-            const aciertos = partPreds.filter(pr=>pr.points_earned===3).length;
-            return(<div>
-              {/* Summary bar */}
-              <div style={{background:C.card,borderRadius:12,padding:"14px 16px",marginBottom:16,border:`1px solid ${C.bdr}`,display:"flex",gap:20,flexWrap:"wrap"}}>
-                <div style={{textAlign:"center"}}><div style={{fontFamily:"Bebas Neue",fontSize:28,color:C.accent}}>{totalPts}</div><div style={{color:C.dim,fontSize:11}}>PTS</div></div>
-                <div style={{textAlign:"center"}}><div style={{fontFamily:"Bebas Neue",fontSize:28,color:C.green}}>{exactos}</div><div style={{color:C.dim,fontSize:11}}>EXACTOS</div></div>
-                <div style={{textAlign:"center"}}><div style={{fontFamily:"Bebas Neue",fontSize:28,color:C.blue}}>{aciertos}</div><div style={{color:C.dim,fontSize:11}}>ACIERTOS</div></div>
-                <div style={{textAlign:"center"}}><div style={{fontFamily:"Bebas Neue",fontSize:28,color:C.text}}>{partPreds.length}</div><div style={{color:C.dim,fontSize:11}}>PREDICCIONES</div></div>
-              </div>
-
-              <GF gs={GS} sel={grp} set={setGrp}/>
-
-              {fm.map(match=>{
-                const pred = partPreds.find(pr=>pr.match_id===match.id);
-                if(!pred) return(
-                  <div key={match.id} style={{background:C.surface,borderRadius:12,padding:14,marginBottom:8,border:`1px solid ${C.bdr}`,opacity:0.5}}>
-                    <div style={{color:C.dim,fontSize:12,marginBottom:6}}>Grupo {match.group_name} · #{match.match_number}</div>
-                    <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:16}}>
-                      <div style={{textAlign:"right",flex:1}}><span style={{color:C.dim,fontSize:14}}>{gf(match.team_home)} {match.team_home}</span></div>
-                      <div style={{fontFamily:"Bebas Neue",fontSize:22,color:C.dim,minWidth:60,textAlign:"center"}}>- : -</div>
-                      <div style={{textAlign:"left",flex:1}}><span style={{color:C.dim,fontSize:14}}>{match.team_away} {gf(match.team_away)}</span></div>
-                    </div>
-                    <div style={{textAlign:"center",marginTop:4,color:C.dim,fontSize:11}}>Sin predicción</div>
-                  </div>
-                );
-                const finished = match.is_finished;
-                const pts = finished ? calcPts(pred.pred_home,pred.pred_away,match.score_home,match.score_away) : null;
-                const bg = finished?(pts===5?C.green+"11":pts===3?C.blue+"11":C.red+"11"):C.card;
-                const bd = finished?(pts===5?C.green+"44":pts===3?C.blue+"44":C.red+"44"):C.bdr;
                 return(
-                  <div key={match.id} style={{background:bg,borderRadius:12,padding:14,marginBottom:8,border:`1px solid ${bd}`}}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-                      <span style={{color:C.dim,fontSize:12}}>Grupo {match.group_name} · #{match.match_number} · {match.match_date}</span>
-                      {finished&&pts!==null&&<span style={{background:(pts===5?C.green:pts===3?C.blue:C.red)+"33",color:pts===5?C.green:pts===3?C.blue:C.red,padding:"2px 8px",borderRadius:6,fontSize:11,fontWeight:700}}>{pts===5?"🎯 +5":pts===3?"✓ +3":"✗ 0"}</span>}
-                      {!finished&&<span style={{color:C.green,fontSize:11}}>🔒 Enviado</span>}
+                  <div key={p.id} className={rankClass}>
+                    <div className={badgeClass}>{i===0?"👑":i+1}</div>
+                    <div className="ranking-item-body">
+                      <div className="participant-name">{p.name}{p.id===user.id?<span className="self-tag"> (tú)</span>:""}</div>
+                      <div className="participant-stats">
+                        <span className="stat-exact">{p.ex} exactos</span>
+                        <span className="stat-divider">·</span>
+                        <span className="stat-winner">{p.ac} aciertos</span>
+                        <span className="stat-divider">·</span>
+                        <span className="stat-pred">{p.tp} pred.</span>
+                      </div>
                     </div>
-                    <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
-                      <div style={{textAlign:"right",flex:1,minWidth:0}}><div style={{color:C.text,fontSize:14,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{gf(match.team_home)} {match.team_home}</div></div>
-                      <div style={{fontFamily:"Bebas Neue",fontSize:24,color:C.accent,minWidth:60,textAlign:"center"}}>{pred.pred_home} - {pred.pred_away}</div>
-                      <div style={{textAlign:"left",flex:1,minWidth:0}}><div style={{color:C.text,fontSize:14,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{match.team_away} {gf(match.team_away)}</div></div>
+                    <div className="ranking-item-pts">
+                      <div className="pts-num text-bebas" style={{color:isTop1?"var(--gold)":"var(--accent)"}}>{p.pts}</div>
+                      <div className="pts-lbl text-xs">PTS</div>
                     </div>
-                    {finished&&<div style={{textAlign:"center",marginTop:6,color:C.dim,fontSize:12}}>Real: <span style={{color:C.accent,fontWeight:700}}>{match.score_home} - {match.score_away}</span></div>}
                   </div>
                 );
               })}
-            </div>);
-          })() : (
-            <div style={{textAlign:"center",color:C.dim,padding:40,background:C.card,borderRadius:12,border:`1px solid ${C.bdr}`}}>
-              <div style={{fontSize:40,marginBottom:12}}>👆</div>
-              <div>Seleccioná un participante para ver sus predicciones</div>
+              {!ranking.length&&<div className="no-data">Sin participantes aún</div>}
             </div>
-          )}
-        </div>)}
+          </div>
+        )}
+
+        {/* PREDICTIONS */}
+        {view==="predictions"&&(
+          <div className="view-predictions fade-in">
+            <div className="view-header-row">
+              <h3 className="section-title text-bebas" style={{margin:0}}>📝 MIS PREDICCIONES</h3>
+              {pendN>0&&<button onClick={submitAll} disabled={sending} className="btn-success">{sending?"Enviando...":`Enviar todas (${pendN}) 🔒`}</button>}
+            </div>
+
+            {/* Sub-tabs: Predictions vs Simulated Table */}
+            <div className="subtabs-bar">
+              <button onClick={()=>setShowSim(false)} className={`btn-tab-pill ${!showSim?'active':''}`}>📝 Mis predicciones</button>
+              <button onClick={()=>setShowSim(true)} className={`btn-tab-pill ${showSim?'active':''}`}>📊 Mi tabla simulada</button>
+            </div>
+
+            {/* SIMULATED TABLE VIEW */}
+            {showSim?(
+              <div className="simulated-view fade-in">
+                <div className="info-banner">
+                  <span className="banner-icon">📊</span>
+                  <div className="banner-text">Así quedarían los grupos según <strong className="text-highlight">tus predicciones</strong>. Se actualiza conforme llenás resultados.</div>
+                </div>
+                {["A","B","C","D","E","F","G","H","I","J","K","L"].map(g=>{
+                  const standings = getGroupStandingsPred(g);
+                  const predsInGroup = matches.filter(m=>m.group_name===g).filter(m=>preds.some(p=>p.match_id===m.id)||drafts[m.id]).length;
+                  return(
+                    <div key={g} className="glass-card group-standings-card">
+                      <div className="group-header group-header-blue">
+                        <span className="group-title text-bebas">GRUPO {g}</span>
+                        <span className="group-status">{predsInGroup}/6 predicciones</span>
+                      </div>
+                      <div className="table-wrapper">
+                        <table className="custom-table">
+                          <thead>
+                            <tr>
+                              <th style={{textAlign:"left",width:"40%"}}>Equipo</th>
+                              <th>PJ</th><th>G</th><th>E</th><th>P</th>
+                              <th>GF</th><th>GC</th><th>DIF</th>
+                              <th style={{color:"var(--blue)"}}>PTS</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {standings.map((t,i)=>(
+                              <tr key={t.name} className={i<2?"table-row-promoted":""}>
+                                <td style={{fontWeight:500}}>
+                                  <span style={{display:"inline-flex",alignItems:"center",gap:8}}>
+                                    {i<2&&<span className="promotion-dot" style={{background:"var(--blue)"}}/>}
+                                    <span className="flag-emoji">{gf(t.name)}</span> {t.name}
+                                  </span>
+                                </td>
+                                <td className="text-center">{t.pj}</td>
+                                <td className="text-center">{t.g}</td>
+                                <td className="text-center">{t.e}</td>
+                                <td className="text-center">{t.p}</td>
+                                <td className="text-center">{t.gf}</td>
+                                <td className="text-center">{t.gc}</td>
+                                <td className="text-center" style={{color:t.gf-t.gc>0?"var(--green)":t.gf-t.gc<0?"var(--red)":"var(--text-dim)"}}>{t.gf-t.gc>0?"+":""}{t.gf-t.gc}</td>
+                                <td className="text-center text-bebas" style={{color:"var(--blue)",fontWeight:700,fontSize:18}}>{t.pts}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  );
+                })}
+                {/* Simulated best thirds */}
+                {(()=>{
+                  const bt=getBestThirds(getGroupStandingsPred);
+                  return bt.length>0?(
+                    <div className="glass-card group-standings-card">
+                      <div className="group-header">
+                        <span className="group-title text-bebas">MEJORES TERCEROS</span>
+                        <span className="group-status">Clasifican los 8 mejores</span>
+                      </div>
+                      <div className="table-wrapper">
+                        <table className="custom-table">
+                          <thead>
+                            <tr>
+                              <th style={{textAlign:"left",paddingLeft:16}}>Grupo</th>
+                              <th style={{textAlign:"left"}}>Equipo</th>
+                              <th>PJ</th><th>G</th><th>E</th><th>P</th>
+                              <th>GF</th><th>GC</th><th>DIF</th>
+                              <th style={{color:"var(--accent)"}}>PTS</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {bt.map((t,i)=>(
+                              <tr key={t.name} className={i<8?"table-row-promoted-thirds":""} style={{opacity:i>=8?0.55:1}}>
+                                <td style={{color:"var(--accent)",fontWeight:600,paddingLeft:16}}>{t.group}</td>
+                                <td style={{fontWeight:500}}>
+                                  <span style={{display:"inline-flex",alignItems:"center",gap:6}}>
+                                    {i<8&&<span className="promotion-dot" style={{background:"var(--accent)"}}/>}
+                                    <span className="flag-emoji">{gf(t.name)}</span> {t.name}
+                                  </span>
+                                </td>
+                                <td className="text-center">{t.pj}</td>
+                                <td className="text-center">{t.g}</td>
+                                <td className="text-center">{t.e}</td>
+                                <td className="text-center">{t.p}</td>
+                                <td className="text-center">{t.gf}</td>
+                                <td className="text-center">{t.gc}</td>
+                                <td className="text-center" style={{color:t.gf-t.gc>0?"var(--green)":t.gf-t.gc<0?"var(--red)":"var(--text-dim)"}}>{t.gf-t.gc>0?"+":""}{t.gf-t.gc}</td>
+                                <td className="text-center text-bebas" style={{color:"var(--accent)",fontWeight:700,fontSize:18}}>{t.pts}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ):null;
+                })()}
+              </div>
+            ):(
+              <div className="predictions-list-view fade-in">
+                <div className="info-banner">
+                  <span className="banner-icon">🔒</span>
+                  <div className="banner-text">Una vez enviada, la predicción <strong className="text-highlight">NO se puede cambiar</strong>.</div>
+                </div>
+                <GF gs={GS} sel={grp} set={setGrp}/>
+                <div className="fixtures-list">
+                  {fm.map(match=>{
+                    const pred=getPred(match.id), locked=!!pred, draft=drafts[match.id]||{}, finished=match.is_finished;
+                    let pts=null; if(finished&&pred) pts=calcPts(pred.pred_home,pred.pred_away,match.score_home,match.score_away);
+                    
+                    let matchCardClass = "match-card";
+                    if(finished){
+                      if(pts===5) matchCardClass += " match-card-exact";
+                      else if(pts===3) matchCardClass += " match-card-winner";
+                      else matchCardClass += " match-card-incorrect";
+                    } else if(locked){
+                      matchCardClass += " match-card-locked";
+                    }
+                    
+                    return(
+                      <div key={match.id} className={matchCardClass}>
+                        <div className="match-card-header">
+                          <span className="match-meta">Grupo {match.group_name} · #{match.match_number} · {match.match_date}</span>
+                          {finished&&pts!==null&&<span className={`badge ${pts===5?'badge-success':pts===3?'badge-info':'badge-danger'} badge-pts-earned`}>{pts===5?"🎯 EXACTO +5":pts===3?"✓ +3":"✗ 0"}</span>}
+                          {!finished&&locked&&<span className="badge badge-success">🔒 Enviado</span>}
+                          {!finished&&!locked&&!draft.home&&!draft.away&&<span className="badge badge-neutral">Pendiente</span>}
+                          {!finished&&!locked&&(draft.home!==undefined||draft.away!==undefined)&&<span className="badge badge-warning">Sin guardar</span>}
+                        </div>
+                        <div className="match-fixture-row">
+                          <div className="team-home">
+                            <span className="team-name">{match.team_home}</span>
+                            <span className="flag-emoji large">{gf(match.team_home)}</span>
+                          </div>
+                          <div className="score-inputs-container">
+                            {locked?(
+                              <div className="locked-prediction text-bebas">
+                                <span className="predicted-score">{pred.pred_home}</span>
+                                <span className="score-separator">:</span>
+                                <span className="predicted-score">{pred.pred_away}</span>
+                              </div>
+                            ):(
+                              <div className="inputs-row">
+                                <input type="number" min="0" max="20" value={draft.home??""} onChange={e=>updDraft(match.id,"home",e.target.value)} className="score-box" placeholder="-"/>
+                                <span className="score-separator">:</span>
+                                <input type="number" min="0" max="20" value={draft.away??""} onChange={e=>updDraft(match.id,"away",e.target.value)} className="score-box" placeholder="-"/>
+                              </div>
+                            )}
+                          </div>
+                          <div className="team-away">
+                            <span className="flag-emoji large">{gf(match.team_away)}</span>
+                            <span className="team-name">{match.team_away}</span>
+                          </div>
+                        </div>
+                        {finished&&<div className="real-score-row">Resultado real: <span className="real-score-accent text-bebas">{match.score_home} - {match.score_away}</span></div>}
+                        {!locked&&draft.home!==undefined&&draft.home!==""&&draft.away!==undefined&&draft.away!==""&&(
+                          <div className="match-card-actions">
+                            <button onClick={()=>submitOne(match.id)} className="btn-success btn-sm-action">Enviar 🔒</button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {!fm.length&&<div className="no-data">No hay partidos en este grupo</div>}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* GROUPS STANDINGS */}
+        {view==="groups"&&(
+          <div className="view-groups fade-in">
+            <h3 className="section-title text-bebas">⚽ TABLA DE GRUPOS</h3>
+            <p className="section-subtitle">Posiciones actualizadas en base a los resultados reales</p>
+            {["A","B","C","D","E","F","G","H","I","J","K","L"].map(g=>{
+              const standings = getGroupStandings(g);
+              const groupFinished = matches.filter(m=>m.group_name===g&&m.is_finished).length;
+              return(
+                <div key={g} className="glass-card group-standings-card">
+                  <div className="group-header">
+                    <span className="group-title text-bebas">GRUPO {g}</span>
+                    <span className="group-status">{groupFinished}/6 partidos finalizados</span>
+                  </div>
+                  <div className="table-wrapper">
+                    <table className="custom-table">
+                      <thead>
+                        <tr>
+                          <th style={{textAlign:"left",width:"40%"}}>Equipo</th>
+                          <th>PJ</th><th>G</th><th>E</th><th>P</th>
+                          <th>GF</th><th>GC</th><th>DIF</th>
+                          <th style={{color:"var(--accent)"}}>PTS</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {standings.map((t,i)=>(
+                          <tr key={t.name} className={i<2?"table-row-promoted":""}>
+                            <td style={{fontWeight:500}}>
+                              <span style={{display:"inline-flex",alignItems:"center",gap:8}}>
+                                {i<2&&<span className="promotion-dot" style={{background:"var(--green)"}}/>}
+                                <span className="flag-emoji">{gf(t.name)}</span> {t.name}
+                              </span>
+                            </td>
+                            <td className="text-center">{t.pj}</td><td className="text-center">{t.g}</td><td className="text-center">{t.e}</td><td className="text-center">{t.p}</td>
+                            <td className="text-center">{t.gf}</td><td className="text-center">{t.gc}</td>
+                            <td className="text-center" style={{color:t.gf-t.gc>0?"var(--green)":t.gf-t.gc<0?"var(--red)":"var(--text-dim)"}}>{t.gf-t.gc>0?"+":""}{t.gf-t.gc}</td>
+                            <td className="text-center text-bebas" style={{color:"var(--accent)",fontWeight:700,fontSize:18}}>{t.pts}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {groupFinished>0&&<div className="group-footer-info">🟢 Clasifican los 2 primeros + mejores terceros</div>}
+                </div>
+              );
+            })}
+            {/* Best third-placed teams (real) */}
+            {(()=>{
+              const bt=getBestThirds(getGroupStandings);
+              return bt.length>0?(
+                <div className="glass-card group-standings-card">
+                  <div className="group-header">
+                    <span className="group-title text-bebas">MEJORES TERCEROS</span>
+                    <span className="group-status">Clasifican los 8 mejores</span>
+                  </div>
+                  <div className="table-wrapper">
+                    <table className="custom-table">
+                      <thead>
+                        <tr>
+                          <th style={{textAlign:"left",paddingLeft:16}}>Grupo</th>
+                          <th style={{textAlign:"left"}}>Equipo</th>
+                          <th>PJ</th><th>G</th><th>E</th><th>P</th>
+                          <th>GF</th><th>GC</th><th>DIF</th>
+                          <th style={{color:"var(--accent)"}}>PTS</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {bt.map((t,i)=>(
+                          <tr key={t.name} className={i<8?"table-row-promoted-thirds":""} style={{opacity:i>=8?0.55:1}}>
+                            <td style={{color:"var(--accent)",fontWeight:600,paddingLeft:16}}>{t.group}</td>
+                            <td style={{fontWeight:500}}>
+                              <span style={{display:"inline-flex",alignItems:"center",gap:6}}>
+                                {i<8&&<span className="promotion-dot" style={{background:"var(--green)"}}/>}
+                                <span className="flag-emoji">{gf(t.name)}</span> {t.name}
+                              </span>
+                            </td>
+                            <td className="text-center">{t.pj}</td><td className="text-center">{t.g}</td><td className="text-center">{t.e}</td><td className="text-center">{t.p}</td>
+                            <td className="text-center">{t.gf}</td><td className="text-center">{t.gc}</td>
+                            <td className="text-center" style={{color:t.gf-t.gc>0?"var(--green)":t.gf-t.gc<0?"var(--red)":"var(--text-dim)"}}>{t.gf-t.gc>0?"+":""}{t.gf-t.gc}</td>
+                            <td className="text-center text-bebas" style={{color:"var(--accent)",fontWeight:700,fontSize:18}}>{t.pts}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ):null;
+            })()}
+          </div>
+        )}
+
+        {/* RESULTS */}
+        {view==="results"&&(
+          <div className="view-results fade-in">
+            <h3 className="section-title text-bebas">📊 RESULTADOS</h3>
+            <GF gs={GS} sel={grp} set={setGrp}/>
+            <div className="fixtures-list">
+              {fm.map(m=>{
+                let cardClass = "match-card";
+                if(m.is_finished){
+                  cardClass += " match-card-locked";
+                } else {
+                  cardClass += " match-card-finished opacity-60";
+                }
+                
+                return(
+                  <div key={m.id} className={cardClass}>
+                    <div className="match-card-header">
+                      <span className="match-meta">Grupo {m.group_name} · #{m.match_number} · {m.match_date}</span>
+                      {m.is_finished ? (
+                        <span className="badge badge-success">✓ FINAL</span>
+                      ) : (
+                        <span className="badge badge-neutral">Pendiente</span>
+                      )}
+                    </div>
+                    <div className="match-fixture-row">
+                      <div className="team-home">
+                        <span className="team-name">{m.team_home}</span>
+                        <span className="flag-emoji large">{gf(m.team_home)}</span>
+                      </div>
+                      <div className="score-inputs-container">
+                        <div className="locked-prediction text-bebas">
+                          {m.is_finished ? (
+                            <>
+                              <span className="predicted-score" style={{color:"var(--accent)"}}>{m.score_home}</span>
+                              <span className="score-separator">-</span>
+                              <span className="predicted-score" style={{color:"var(--accent)"}}>{m.score_away}</span>
+                            </>
+                          ) : (
+                            <span className="predicted-score" style={{color:"var(--text-dim)"}}>vs</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="team-away">
+                        <span className="flag-emoji large">{gf(m.team_away)}</span>
+                        <span className="team-name">{m.team_away}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              {!fm.length&&<div className="no-data">No hay partidos en este grupo</div>}
+            </div>
+          </div>
+        )}
+
+        {/* TRANSPARENCY - ALL PREDICTIONS */}
+        {view==="transparency"&&(
+          <div className="view-transparency fade-in">
+            <h3 className="section-title text-bebas">👁️ QUINIELAS DE TODOS</h3>
+            <p className="section-subtitle">Consultá las predicciones de cada participante. Solo lectura.</p>
+            <div className="participant-chips-container">
+              {parts.map(p=>{
+                const pp = allPreds.filter(pr=>pr.participant_id===p.id);
+                const isActive = selectedPart?.id===p.id;
+                return(
+                  <button key={p.id} onClick={()=>setSelectedPart(isActive?null:p)} className={`chip ${isActive?'active':''}`}>
+                    <span className="chip-name">{p.name}{p.id===user.id?" (tú)":""}</span>
+                    <span className="chip-count">{pp.length} pred.</span>
+                  </button>
+                );
+              })}
+            </div>
+            {selectedPart ? (()=>{
+              const partPreds = allPreds.filter(pr=>pr.participant_id===selectedPart.id);
+              const totalPts = partPreds.reduce((s,pr)=>s+(pr.points_earned||0),0);
+              const exactos = partPreds.filter(pr=>pr.points_earned===5).length;
+              const aciertos = partPreds.filter(pr=>pr.points_earned===3).length;
+              return(
+                <div className="participant-dashboard fade-in">
+                  <div className="glass-card summary-dashboard">
+                    <div className="summary-dashboard-item">
+                      <div className="dashboard-val text-bebas" style={{color:"var(--accent)"}}>{totalPts}</div>
+                      <div className="dashboard-lbl">PTS</div>
+                    </div>
+                    <div className="summary-dashboard-item">
+                      <div className="dashboard-val text-bebas" style={{color:"var(--green)"}}>{exactos}</div>
+                      <div className="dashboard-lbl">EXACTOS</div>
+                    </div>
+                    <div className="summary-dashboard-item">
+                      <div className="dashboard-val text-bebas" style={{color:"var(--blue)"}}>{aciertos}</div>
+                      <div className="dashboard-lbl">ACIERTOS</div>
+                    </div>
+                    <div className="summary-dashboard-item">
+                      <div className="dashboard-val text-bebas">{partPreds.length}</div>
+                      <div className="dashboard-lbl">PREDICCIONES</div>
+                    </div>
+                  </div>
+                  <GF gs={GS} sel={grp} set={setGrp}/>
+                  <div className="fixtures-list">
+                    {fm.map(match=>{
+                      const pred = partPreds.find(pr=>pr.match_id===match.id);
+                      if(!pred) return(
+                        <div key={match.id} className="match-card match-card-finished opacity-60">
+                          <div className="match-card-header">
+                            <span className="match-meta">Grupo {match.group_name} · #{match.match_number}</span>
+                            <span className="badge badge-neutral">Sin predicción</span>
+                          </div>
+                          <div className="match-fixture-row">
+                            <div className="team-home">
+                              <span className="team-name" style={{color:"var(--text-dim)"}}>{match.team_home}</span>
+                              <span className="flag-emoji large" style={{opacity:0.5}}>{gf(match.team_home)}</span>
+                            </div>
+                            <div className="score-inputs-container">
+                              <div className="locked-prediction text-bebas" style={{color:"var(--text-muted)"}}>- : -</div>
+                            </div>
+                            <div className="team-away">
+                              <span className="flag-emoji large" style={{opacity:0.5}}>{gf(match.team_away)}</span>
+                              <span className="team-name" style={{color:"var(--text-dim)"}}>{match.team_away}</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                      const finished = match.is_finished;
+                      const pts = finished ? calcPts(pred.pred_home,pred.pred_away,match.score_home,match.score_away) : null;
+                      
+                      let matchCardClass = "match-card";
+                      if(finished){
+                        if(pts===5) matchCardClass += " match-card-exact";
+                        else if(pts===3) matchCardClass += " match-card-winner";
+                        else matchCardClass += " match-card-incorrect";
+                      } else {
+                        matchCardClass += " match-card-locked";
+                      }
+
+                      return(
+                        <div key={match.id} className={matchCardClass}>
+                          <div className="match-card-header">
+                            <span className="match-meta">Grupo {match.group_name} · #{match.match_number} · {match.match_date}</span>
+                            {finished&&pts!==null&&<span className={`badge ${pts===5?'badge-success':pts===3?'badge-info':'badge-danger'} badge-pts-earned`}>{pts===5?"🎯 +5":pts===3?"✓ +3":"✗ 0"}</span>}
+                            {!finished&&<span className="badge badge-success">🔒 Enviado</span>}
+                          </div>
+                          <div className="match-fixture-row">
+                            <div className="team-home">
+                              <span className="team-name">{match.team_home}</span>
+                              <span className="flag-emoji large">{gf(match.team_home)}</span>
+                            </div>
+                            <div className="score-inputs-container">
+                              <div className="locked-prediction text-bebas">
+                                <span className="predicted-score">{pred.pred_home}</span>
+                                <span className="score-separator">:</span>
+                                <span className="predicted-score">{pred.pred_away}</span>
+                              </div>
+                            </div>
+                            <div className="team-away">
+                              <span className="flag-emoji large">{gf(match.team_away)}</span>
+                              <span className="team-name">{match.team_away}</span>
+                            </div>
+                          </div>
+                          {finished&&<div className="real-score-row">Resultado real: <span className="real-score-accent text-bebas">{match.score_home} - {match.score_away}</span></div>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })():(
+              <div className="no-selection-banner glass-card text-center">
+                <div style={{fontSize:44,marginBottom:12}}>👆</div>
+                <div className="text-dim font-medium">Seleccioná un participante para ver sus predicciones</div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* ADMIN */}
-        {view==="admin"&&user.is_admin&&(<div>
-          <h3 style={{color:C.text,fontFamily:"Bebas Neue",fontSize:24,letterSpacing:1,marginBottom:8}}>👑 PANEL DE ADMIN</h3>
-          <p style={{color:C.dim,fontSize:13,marginBottom:20}}>Ingresá los resultados reales. Los puntos se recalculan para todos.</p>
-          <div style={{...crd,marginBottom:20,padding:16}}>
-            <h4 style={{color:C.accent,margin:"0 0 12px",fontFamily:"Bebas Neue",fontSize:18,letterSpacing:1}}>PARTICIPANTES ({parts.length})</h4>
-            {parts.map(p=>{const pp=allPreds.filter(pr=>pr.participant_id===p.id);return(
-              <div key={p.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 0",borderBottom:`1px solid ${C.bdr}`}}>
-                <span style={{color:C.text,fontSize:14}}>{p.name}{p.is_admin?" 👑":""}</span>
-                <span style={{color:C.dim,fontSize:12}}>{pp.length} pred.</span>
+        {view==="admin"&&user.is_admin&&(
+          <div className="view-admin fade-in">
+            <h3 className="section-title text-bebas">👑 PANEL DE ADMIN</h3>
+            <p className="section-subtitle">Ingresá los resultados reales. Los puntos se recalculan para todos.</p>
+            <div className="glass-card admin-summary-card">
+              <h4 className="admin-subtitle text-bebas">PARTICIPANTES ({parts.length})</h4>
+              <div className="admin-users-list">
+                {parts.map(p=>{
+                  const pp=allPreds.filter(pr=>pr.participant_id===p.id);
+                  return(
+                    <div key={p.id} className="admin-user-row">
+                      <span className="admin-user-name">{p.name}{p.is_admin?" 👑":""}</span>
+                      <span className="admin-user-meta">{pp.length} pred.</span>
+                    </div>
+                  );
+                })}
               </div>
-            );})}
+            </div>
+            <GF gs={GS} sel={grp} set={setGrp}/>
+            <div className="fixtures-list">
+              {fm.map(m=><AMC key={m.id} m={m} onU={updResult}/>)}
+            </div>
           </div>
-          <GF gs={GS} sel={grp} set={setGrp}/>
-          {fm.map(m=><AMC key={m.id} m={m} onU={updResult}/>)}
-        </div>)}
+        )}
       </div>
     </div>
   );
 }
 
-function GF({gs,sel,set}){return(<div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:20}}>{gs.map(g=><button key={g} onClick={()=>set(g)} style={{background:sel===g?C.accent:C.card,color:sel===g?C.bg:C.dim,border:`1px solid ${sel===g?C.accent:C.bdr}`,borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:13,fontWeight:600}}>{g==="ALL"?"Todos":g}</button>)}</div>);}
+function GF({gs,sel,set}){
+  return(
+    <div className="group-filters">
+      {gs.map(g=>(
+        <button 
+          key={g} 
+          onClick={()=>set(g)} 
+          className={`btn-tab-pill ${sel===g?'active':''}`}
+        >
+          {g==="ALL"?"Todos":g}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 function AMC({m,onU}){
   const [h,sH]=useState(m.score_home!==null?String(m.score_home):"");
   const [a,sA]=useState(m.score_away!==null?String(m.score_away):"");
+  
+  let cardClass = "match-card";
+  if (m.is_finished) {
+    cardClass += " match-card-exact";
+  }
+
   return(
-    <div style={{background:m.is_finished?C.green+"11":C.card,borderRadius:12,padding:16,marginBottom:8,border:`1px solid ${m.is_finished?C.green+"44":C.bdr}`}}>
-      <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
-        <span style={{color:C.dim,fontSize:12}}>Grupo {m.group_name} · #{m.match_number} · {m.match_date}</span>
-        {m.is_finished&&<span style={{color:C.green,fontSize:12,fontWeight:600}}>✓ FINAL</span>}
+    <div className={cardClass}>
+      <div className="match-card-header">
+        <span className="match-meta">Grupo {m.group_name} · #{m.match_number} · {m.match_date}</span>
+        {m.is_finished&&<span className="badge badge-success">✓ FINAL</span>}
       </div>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
-        <div style={{textAlign:"right",flex:1}}><span style={{color:C.text,fontSize:14}}>{gf(m.team_home)} {m.team_home}</span></div>
-        <input type="number" min="0" value={h} onChange={e=>sH(e.target.value)} style={si} placeholder="-"/>
-        <span style={{color:C.dim,fontWeight:700}}>:</span>
-        <input type="number" min="0" value={a} onChange={e=>sA(e.target.value)} style={si} placeholder="-"/>
-        <div style={{textAlign:"left",flex:1}}><span style={{color:C.text,fontSize:14}}>{m.team_away} {gf(m.team_away)}</span></div>
+      <div className="match-fixture-row">
+        <div className="team-home">
+          <span className="team-name">{m.team_home}</span>
+          <span className="flag-emoji large">{gf(m.team_home)}</span>
+        </div>
+        <div className="score-inputs-container">
+          <div className="inputs-row">
+            <input type="number" min="0" value={h} onChange={e=>sH(e.target.value)} className="score-box" placeholder="-"/>
+            <span className="score-separator">:</span>
+            <input type="number" min="0" value={a} onChange={e=>sA(e.target.value)} className="score-box" placeholder="-"/>
+          </div>
+        </div>
+        <div className="team-away">
+          <span className="flag-emoji large">{gf(m.team_away)}</span>
+          <span className="team-name">{m.team_away}</span>
+        </div>
       </div>
-      <div style={{textAlign:"center",marginTop:10}}>
-        <button onClick={()=>{if(h!==""&&a!=="")onU(m.id,h,a);}} style={{background:C.green,color:"#fff",border:"none",borderRadius:8,padding:"6px 16px",cursor:"pointer",fontSize:13,fontWeight:600}}>{m.is_finished?"Actualizar":"Registrar resultado"}</button>
+      <div className="match-card-actions">
+        <button onClick={()=>{if(h!==""&&a!=="")onU(m.id,h,a);}} className="btn-success btn-sm-action">{m.is_finished?"Actualizar resultado":"Registrar resultado"}</button>
       </div>
     </div>
   );
 }
 
-function Msg({t,children}){const bg=t==="e"?C.red:C.green;return(<div style={{background:bg+"22",border:`1px solid ${bg}`,color:bg,padding:"10px 16px",borderRadius:8,marginTop:12,fontSize:14}}>{children}</div>);}
-
-const inp={width:"100%",padding:"12px 16px",borderRadius:10,border:`1px solid ${C.bdr}`,background:C.srf,color:C.text,fontSize:15,marginBottom:12,outline:"none",boxSizing:"border-box",fontFamily:"DM Sans"};
-const btnP={width:"100%",padding:"12px",borderRadius:10,border:"none",background:`linear-gradient(135deg,${C.accent},${C.accentDk})`,color:C.bg,fontSize:16,fontWeight:700,cursor:"pointer",fontFamily:"DM Sans"};
-const lnk={background:"none",border:"none",color:C.accent,cursor:"pointer",fontSize:14,fontWeight:600};
-const crd={background:C.card,borderRadius:16,padding:24,border:`1px solid ${C.bdr}`};
-const si={width:44,height:40,textAlign:"center",borderRadius:8,border:`1px solid ${C.bdr}`,background:C.srf,color:C.text,fontSize:18,fontWeight:700,fontFamily:"Bebas Neue",outline:"none"};
-const th={padding:"8px 6px",textAlign:"center",color:C.dim,fontSize:11,fontWeight:600,letterSpacing:1};
-const td={padding:"10px 6px",textAlign:"center",color:C.text,fontSize:14};
+function Msg({t,children}){
+  const alertClass = t==="e"?"alert-box alert-danger":"alert-box alert-success";
+  return(
+    <div className={alertClass}>
+      <span className="alert-icon">{t==="e"?"⚠️":"✓"}</span>
+      <span className="alert-message">{children}</span>
+    </div>
+  );
+}
