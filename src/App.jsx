@@ -621,7 +621,19 @@ export default function App() {
                 const rankChange = rankingMode === "live" ? getRankChange(p.id, i) : 0;
 
                 return(
-                  <div key={p.id} className={rankClass}>
+                  <div 
+                    key={p.id} 
+                    className={rankClass}
+                    style={{ cursor: "pointer" }}
+                    onClick={() => {
+                      setView("transparency");
+                      setSelectedPart(p);
+                      setSearchQuery("");
+                      setStatusFilter("all");
+                      setCompareMode(false);
+                    }}
+                    title={`Ver quiniela de ${p.name}`}
+                  >
                     <div className="rank-badge-container">
                       <div className={badgeClass}>{i===0?"👑":i+1}</div>
                       {rankChange !== 0 && (
