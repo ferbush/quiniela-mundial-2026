@@ -47,6 +47,7 @@ export default function App() {
   const [drafts, setDrafts] = useState({});
   const [sending, setSending] = useState(false);
   const [showSim, setShowSim] = useState(false);
+  const [selectedPart, setSelectedPart] = useState(null);
 
   const load = useCallback(async () => {
     try {
@@ -237,7 +238,7 @@ export default function App() {
       {/* Nav */}
       <div style={{background:C.srf,borderBottom:`1px solid ${C.bdr}`,padding:"0 20px",overflowX:"auto"}}>
         <div style={{maxWidth:800,margin:"0 auto",display:"flex",gap:0,minWidth:"max-content"}}>
-          {[{id:"ranking",l:"🏅 Ranking",s:true},{id:"predictions",l:"📝 Predicciones",s:true},{id:"groups",l:"⚽ Grupos",s:true},{id:"results",l:"📊 Resultados",s:true},{id:"admin",l:"👑 Admin",s:user.is_admin}].filter(t=>t.s).map(tab=>(
+          {[{id:"ranking",l:"🏅 Ranking",s:true},{id:"predictions",l:"📝 Predicciones",s:true},{id:"groups",l:"⚽ Grupos",s:true},{id:"results",l:"📊 Resultados",s:true},{id:"transparency",l:"👁️ Quinielas",s:true},{id:"admin",l:"👑 Admin",s:user.is_admin}].filter(t=>t.s).map(tab=>(
             <button key={tab.id} onClick={()=>setView(tab.id)} style={{background:view===tab.id?C.accent+"22":"transparent",border:"none",borderBottom:view===tab.id?`2px solid ${C.accent}`:"2px solid transparent",color:view===tab.id?C.accent:C.dim,padding:"12px 16px",cursor:"pointer",fontSize:14,fontWeight:view===tab.id?600:400,whiteSpace:"nowrap"}}>{tab.l}</button>
           ))}
         </div>
@@ -499,6 +500,89 @@ export default function App() {
               </div>
             </div>
           ))}
+        </div>)}
+
+        {/* TRANSPARENCY - ALL PREDICTIONS */}
+        {view==="transparency"&&(<div>
+          <h3 style={{color:C.text,fontFamily:"Bebas Neue",fontSize:24,letterSpacing:1,marginBottom:8}}>👁️ QUINIELAS DE TODOS</h3>
+          <p style={{color:C.dim,fontSize:13,marginBottom:20}}>Consultá las predicciones de cada participante. Solo lectura.</p>
+
+          {/* Participant selector */}
+          <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:20}}>
+            {parts.map(p=>{
+              const pp = allPreds.filter(pr=>pr.participant_id===p.id);
+              return(
+                <button key={p.id} onClick={()=>setSelectedPart(selectedPart?.id===p.id?null:p)} style={{
+                  background:selectedPart?.id===p.id?C.accent:C.card,
+                  color:selectedPart?.id===p.id?C.bg:C.text,
+                  border:`1px solid ${selectedPart?.id===p.id?C.accent:C.bdr}`,
+                  borderRadius:10,padding:"8px 14px",cursor:"pointer",fontSize:14,fontWeight:600,
+                  display:"flex",flexDirection:"column",alignItems:"center",gap:2,
+                }}>
+                  <span>{p.name}{p.id===user.id?" (tú)":""}</span>
+                  <span style={{fontSize:11,fontWeight:400,color:selectedPart?.id===p.id?C.bg+"cc":C.dim}}>{pp.length} pred.</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Selected participant predictions */}
+          {selectedPart ? (()=>{
+            const partPreds = allPreds.filter(pr=>pr.participant_id===selectedPart.id);
+            const totalPts = partPreds.reduce((s,pr)=>s+(pr.points_earned||0),0);
+            const exactos = partPreds.filter(pr=>pr.points_earned===5).length;
+            const aciertos = partPreds.filter(pr=>pr.points_earned===3).length;
+            return(<div>
+              {/* Summary bar */}
+              <div style={{background:C.card,borderRadius:12,padding:"14px 16px",marginBottom:16,border:`1px solid ${C.bdr}`,display:"flex",gap:20,flexWrap:"wrap"}}>
+                <div style={{textAlign:"center"}}><div style={{fontFamily:"Bebas Neue",fontSize:28,color:C.accent}}>{totalPts}</div><div style={{color:C.dim,fontSize:11}}>PTS</div></div>
+                <div style={{textAlign:"center"}}><div style={{fontFamily:"Bebas Neue",fontSize:28,color:C.green}}>{exactos}</div><div style={{color:C.dim,fontSize:11}}>EXACTOS</div></div>
+                <div style={{textAlign:"center"}}><div style={{fontFamily:"Bebas Neue",fontSize:28,color:C.blue}}>{aciertos}</div><div style={{color:C.dim,fontSize:11}}>ACIERTOS</div></div>
+                <div style={{textAlign:"center"}}><div style={{fontFamily:"Bebas Neue",fontSize:28,color:C.text}}>{partPreds.length}</div><div style={{color:C.dim,fontSize:11}}>PREDICCIONES</div></div>
+              </div>
+
+              <GF gs={GS} sel={grp} set={setGrp}/>
+
+              {fm.map(match=>{
+                const pred = partPreds.find(pr=>pr.match_id===match.id);
+                if(!pred) return(
+                  <div key={match.id} style={{background:C.surface,borderRadius:12,padding:14,marginBottom:8,border:`1px solid ${C.bdr}`,opacity:0.5}}>
+                    <div style={{color:C.dim,fontSize:12,marginBottom:6}}>Grupo {match.group_name} · #{match.match_number}</div>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:16}}>
+                      <div style={{textAlign:"right",flex:1}}><span style={{color:C.dim,fontSize:14}}>{gf(match.team_home)} {match.team_home}</span></div>
+                      <div style={{fontFamily:"Bebas Neue",fontSize:22,color:C.dim,minWidth:60,textAlign:"center"}}>- : -</div>
+                      <div style={{textAlign:"left",flex:1}}><span style={{color:C.dim,fontSize:14}}>{match.team_away} {gf(match.team_away)}</span></div>
+                    </div>
+                    <div style={{textAlign:"center",marginTop:4,color:C.dim,fontSize:11}}>Sin predicción</div>
+                  </div>
+                );
+                const finished = match.is_finished;
+                const pts = finished ? calcPts(pred.pred_home,pred.pred_away,match.score_home,match.score_away) : null;
+                const bg = finished?(pts===5?C.green+"11":pts===3?C.blue+"11":C.red+"11"):C.card;
+                const bd = finished?(pts===5?C.green+"44":pts===3?C.blue+"44":C.red+"44"):C.bdr;
+                return(
+                  <div key={match.id} style={{background:bg,borderRadius:12,padding:14,marginBottom:8,border:`1px solid ${bd}`}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                      <span style={{color:C.dim,fontSize:12}}>Grupo {match.group_name} · #{match.match_number} · {match.match_date}</span>
+                      {finished&&pts!==null&&<span style={{background:(pts===5?C.green:pts===3?C.blue:C.red)+"33",color:pts===5?C.green:pts===3?C.blue:C.red,padding:"2px 8px",borderRadius:6,fontSize:11,fontWeight:700}}>{pts===5?"🎯 +5":pts===3?"✓ +3":"✗ 0"}</span>}
+                      {!finished&&<span style={{color:C.green,fontSize:11}}>🔒 Enviado</span>}
+                    </div>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+                      <div style={{textAlign:"right",flex:1,minWidth:0}}><div style={{color:C.text,fontSize:14,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{gf(match.team_home)} {match.team_home}</div></div>
+                      <div style={{fontFamily:"Bebas Neue",fontSize:24,color:C.accent,minWidth:60,textAlign:"center"}}>{pred.pred_home} - {pred.pred_away}</div>
+                      <div style={{textAlign:"left",flex:1,minWidth:0}}><div style={{color:C.text,fontSize:14,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{match.team_away} {gf(match.team_away)}</div></div>
+                    </div>
+                    {finished&&<div style={{textAlign:"center",marginTop:6,color:C.dim,fontSize:12}}>Real: <span style={{color:C.accent,fontWeight:700}}>{match.score_home} - {match.score_away}</span></div>}
+                  </div>
+                );
+              })}
+            </div>);
+          })() : (
+            <div style={{textAlign:"center",color:C.dim,padding:40,background:C.card,borderRadius:12,border:`1px solid ${C.bdr}`}}>
+              <div style={{fontSize:40,marginBottom:12}}>👆</div>
+              <div>Seleccioná un participante para ver sus predicciones</div>
+            </div>
+          )}
         </div>)}
 
         {/* ADMIN */}
