@@ -142,28 +142,8 @@ export default function App() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [compareMode, setCompareMode] = useState(false);
 
-  const [apiMatches, setApiMatches] = useState([]);
-  const [lastSync, setLastSync] = useState(null);
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [autoSync, setAutoSync] = useState(true);
-  const [rankingMode, setRankingMode] = useState("live");
-
-  const fetchApiMatches = useCallback(async () => {
-    setIsSyncing(true);
-    try {
-      const res = await fetch("https://worldcup26.ir/get/games");
-      if (!res.ok) throw new Error("API response error");
-      const data = await res.json();
-      if (data && data.games) {
-        setApiMatches(data.games);
-        setLastSync(new Date());
-      }
-    } catch (e) {
-      console.error("Failed to fetch API matches:", e);
-    } finally {
-      setIsSyncing(false);
-    }
-  }, []);
+  const [adminSearch, setAdminSearch] = useState("");
+  const [adminStatus, setAdminStatus] = useState("pending");
 
   const load = useCallback(async () => {
     try {
@@ -176,16 +156,7 @@ export default function App() {
 
   useEffect(() => {
     load();
-    fetchApiMatches();
-  }, [load, fetchApiMatches]);
-
-  useEffect(() => {
-    if (!autoSync) return;
-    const t = setInterval(() => {
-      fetchApiMatches();
-    }, 60000);
-    return () => clearInterval(t);
-  }, [autoSync, fetchApiMatches]);
+  }, [load]);
 
   useEffect(()=>{ if(err||ok){ const t=setTimeout(()=>{setErr("");setOk("");},4000); return ()=>clearTimeout(t); } },[err,ok]);
 
@@ -245,149 +216,29 @@ export default function App() {
     } catch(e){ setErr("Error: "+e.message); }
   };
 
-  const syncAllFinishedMatchesFromApi = async () => {
-    if (!user?.is_admin || apiMatches.length === 0) return;
-    setSending(true);
-    setIsSyncing(true);
-    setErr("");
-    setOk("");
-    let updatedMatchesCount = 0;
-    try {
-      const finishedApiMatches = apiMatches.filter(m => m.finished === "TRUE");
-      for (const apiM of finishedApiMatches) {
-        // Find matching db match by team names (group stage matches)
-        const dbM = matches.find(dbMatch => {
-          const apiHome = normalizeTeamName(apiM.home_team_name_en);
-          const apiAway = normalizeTeamName(apiM.away_team_name_en);
-          const dbHome = normalizeTeamName(dbMatch.team_home);
-          const dbAway = normalizeTeamName(dbMatch.team_away);
-          return (apiHome === dbHome && apiAway === dbAway) || (apiHome === dbAway && apiAway === dbHome);
-        });
+  const mergedMatches = matches.map(dbMatch => ({
+    ...dbMatch,
+    is_live: false,
+    time_elapsed: dbMatch.is_finished ? "finished" : "notstarted"
+  }));
 
-        if (dbM) {
-          const apiHomeScore = apiM.home_score !== null && apiM.home_score !== "null" ? parseInt(apiM.home_score) : null;
-          const apiAwayScore = apiM.away_score !== null && apiM.away_score !== "null" ? parseInt(apiM.away_score) : null;
-          
-          // Determine if team order is flipped in the API compared to database
-          const isFlipped = normalizeTeamName(apiM.home_team_name_en) === normalizeTeamName(dbM.team_away);
-          
-          const homeScore = isFlipped ? apiAwayScore : apiHomeScore;
-          const awayScore = isFlipped ? apiHomeScore : apiAwayScore;
-
-          if (homeScore !== null && awayScore !== null) {
-            if (!dbM.is_finished || dbM.score_home !== homeScore || dbM.score_away !== awayScore) {
-              await supa(`matches?id=eq.${dbM.id}`, {
-                method: "PATCH",
-                headers: { ...hdrs, Prefer: "return=representation" },
-                body: JSON.stringify({
-                  score_home: homeScore,
-                  score_away: awayScore,
-                  is_finished: true
-                })
-              });
-              const freshPreds = await supa(`predictions?match_id=eq.${dbM.id}`);
-              for (const pr of (freshPreds || [])) {
-                const pts = calcPts(pr.pred_home, pr.pred_away, homeScore, awayScore);
-                await supa(`predictions?id=eq.${pr.id}`, {
-                  method: "PATCH",
-                  body: JSON.stringify({ points_earned: pts })
-                });
-              }
-              updatedMatchesCount++;
-            }
-          }
-        }
+  const ranking = parts.map(p => {
+    const pp = allPreds.filter(pr => pr.participant_id === p.id);
+    let pts = 0;
+    let ex = 0;
+    let ac = 0;
+    pp.forEach(pr => {
+      const m = mergedMatches.find(match => match.id === pr.match_id);
+      if (!m) return;
+      if (m.is_finished) {
+        const pPoints = calcPts(pr.pred_home, pr.pred_away, m.score_home, m.score_away);
+        pts += pPoints;
+        if (pPoints === 5) ex++;
+        else if (pPoints === 3) ac++;
       }
-      await load();
-      if (updatedMatchesCount > 0) {
-        setOk(`¡Sincronización completa! Se actualizaron ${updatedMatchesCount} partidos en Supabase.`);
-        triggerConfetti();
-      } else {
-        setOk("Todos los resultados de la base de datos ya están al día con la API.");
-      }
-    } catch (e) {
-      setErr("Error durante la sincronización: " + e.message);
-    } finally {
-      setSending(false);
-      setIsSyncing(false);
-    }
-  };
-
-  const mergedMatches = matches.map(dbMatch => {
-    if (dbMatch.is_finished) {
-      return {
-        ...dbMatch,
-        is_live: false,
-        time_elapsed: "finished"
-      };
-    }
-    // Find matching API match by team names
-    const apiMatch = apiMatches.find(m => {
-      const apiHome = normalizeTeamName(m.home_team_name_en);
-      const apiAway = normalizeTeamName(m.away_team_name_en);
-      const dbHome = normalizeTeamName(dbMatch.team_home);
-      const dbAway = normalizeTeamName(dbMatch.team_away);
-      return (apiHome === dbHome && apiAway === dbAway) || (apiHome === dbAway && apiAway === dbHome);
     });
-
-    if (apiMatch && autoSync) {
-      const apiFinished = apiMatch.finished === "TRUE";
-      const apiLive = !apiFinished && apiMatch.time_elapsed !== "notstarted" && apiMatch.time_elapsed !== "finished";
-      const apiHomeScore = apiMatch.home_score !== null && apiMatch.home_score !== "null" ? parseInt(apiMatch.home_score) : null;
-      const apiAwayScore = apiMatch.away_score !== null && apiMatch.away_score !== "null" ? parseInt(apiMatch.away_score) : null;
-      
-      const isFlipped = normalizeTeamName(apiMatch.home_team_name_en) === normalizeTeamName(dbMatch.team_away);
-      
-      const homeScore = isFlipped ? apiAwayScore : apiHomeScore;
-      const awayScore = isFlipped ? apiHomeScore : apiAwayScore;
-
-      if (apiFinished || apiLive) {
-        return {
-          ...dbMatch,
-          score_home: homeScore !== null ? homeScore : dbMatch.score_home,
-          score_away: awayScore !== null ? awayScore : dbMatch.score_away,
-          is_finished: apiFinished,
-          is_live: apiLive,
-          time_elapsed: apiMatch.time_elapsed
-        };
-      }
-    }
-    return {
-      ...dbMatch,
-      is_live: false,
-      time_elapsed: dbMatch.is_finished ? "finished" : "notstarted"
-    };
-  });
-
-  const getRanking = useCallback((useLive) => {
-    return parts.map(p => {
-      const pp = allPreds.filter(pr => pr.participant_id === p.id);
-      let pts = 0;
-      let ex = 0;
-      let ac = 0;
-      pp.forEach(pr => {
-        const m = mergedMatches.find(match => match.id === pr.match_id);
-        if (!m) return;
-        if (m.is_finished || (useLive && m.is_live)) {
-          const pPoints = calcPts(pr.pred_home, pr.pred_away, m.score_home, m.score_away);
-          pts += pPoints;
-          if (pPoints === 5) ex++;
-          else if (pPoints === 3) ac++;
-        }
-      });
-      return { ...p, pts, ex, ac, tp: pp.length };
-    }).sort((a, b) => b.pts - a.pts || b.ex - a.ex || a.name.localeCompare(b.name));
-  }, [parts, allPreds, mergedMatches]);
-
-  const officialRanking = getRanking(false);
-  const liveRanking = getRanking(true);
-  const ranking = rankingMode === "live" ? liveRanking : officialRanking;
-
-  const getRankChange = (participantId, currentRankIndex) => {
-    const offIndex = officialRanking.findIndex(p => p.id === participantId);
-    if (offIndex === -1) return 0;
-    return offIndex - currentRankIndex;
-  };
+    return { ...p, pts, ex, ac, tp: pp.length };
+  }).sort((a, b) => b.pts - a.pts || b.ex - a.ex || a.name.localeCompare(b.name));
 
   const GS=["ALL","A","B","C","D","E","F","G","H","I","J","K","L"];
   const fm = grp==="ALL"?mergedMatches:mergedMatches.filter(m=>m.group_name===grp);
@@ -563,45 +414,6 @@ export default function App() {
               </div>
             </div>
 
-            <div className="ranking-controls-row">
-              <div className="ranking-mode-selector">
-                <button 
-                  onClick={() => setRankingMode("live")} 
-                  className={`btn-tab-pill ${rankingMode === "live" ? "active" : ""}`}
-                >
-                  ● Tabla En Vivo
-                </button>
-                <button 
-                  onClick={() => setRankingMode("official")} 
-                  className={`btn-tab-pill ${rankingMode === "official" ? "active" : ""}`}
-                >
-                  Tabla Oficial
-                </button>
-              </div>
-              <div className="sync-status-indicator" style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <label style={{ display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: "12px", borderRight: "1px solid var(--border)", paddingRight: "10px" }}>
-                  <input 
-                    type="checkbox" 
-                    checked={autoSync} 
-                    onChange={e => setAutoSync(e.target.checked)} 
-                    style={{ cursor: "pointer" }}
-                  />
-                  <span>API en Vivo</span>
-                </label>
-                {isSyncing ? (
-                  <span className="sync-spinner">🔄 Sincronizando...</span>
-                ) : lastSync ? (
-                  <span className="sync-time" title="Actualizar ahora" onClick={fetchApiMatches} style={{cursor: "pointer"}}>
-                    Sincronizado: {lastSync.toLocaleTimeString()} ⚡
-                  </span>
-                ) : (
-                  <span className="sync-error-text" onClick={fetchApiMatches} style={{cursor: "pointer"}}>
-                    Error de sincronización ⚠️
-                  </span>
-                )}
-              </div>
-            </div>
-
             <h3 className="section-title text-bebas">🏅 TABLA DE POSICIONES</h3>
             <div className="ranking-list">
               {ranking.map((p,i)=>{
@@ -617,8 +429,6 @@ export default function App() {
                 if(i===0) badgeClass += " rank-badge-1";
                 else if(i===1) badgeClass += " rank-badge-2";
                 else if(i===2) badgeClass += " rank-badge-3";
-
-                const rankChange = rankingMode === "live" ? getRankChange(p.id, i) : 0;
 
                 return(
                   <div 
@@ -636,11 +446,6 @@ export default function App() {
                   >
                     <div className="rank-badge-container">
                       <div className={badgeClass}>{i===0?"👑":i+1}</div>
-                      {rankChange !== 0 && (
-                        <span className={`rank-change-badge ${rankChange > 0 ? "rank-up" : "rank-down"}`}>
-                          {rankChange > 0 ? `▲ ${rankChange}` : `▼ ${Math.abs(rankChange)}`}
-                        </span>
-                      )}
                     </div>
                     <div className="ranking-item-body">
                       <div className="participant-name">{p.name}{p.id===user.id?<span className="self-tag"> (tú)</span>:""}</div>
@@ -1312,30 +1117,6 @@ export default function App() {
             <p className="section-subtitle">Ingresá los resultados reales. Los puntos se recalculan para todos.</p>
             
             <div className="glass-card admin-summary-card" style={{ marginBottom: 24 }}>
-              <h4 className="admin-subtitle text-bebas">🔌 SINCRONIZACIÓN AUTOMÁTICA (API)</h4>
-              <p className="text-dim text-sm" style={{ marginBottom: 12 }}>
-                Sincronizá todos los partidos finalizados desde la API de la Copa del Mundo 2026 directamente a la base de datos Supabase de forma masiva.
-              </p>
-              <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-                <button 
-                  onClick={syncAllFinishedMatchesFromApi} 
-                  disabled={isSyncing || apiMatches.length === 0} 
-                  className="btn-primary"
-                  style={{ width: "auto", padding: "10px 20px" }}
-                >
-                  {isSyncing ? "Procesando..." : "Sincronizar y Guardar Resultados Finales 💾"}
-                </button>
-                <div className="sync-status-indicator" style={{ display: "inline-block" }}>
-                  {apiMatches.length > 0 ? (
-                    <span className="text-green font-medium" style={{color:"var(--green)"}}>✓ API lista ({apiMatches.length} partidos cargados)</span>
-                  ) : (
-                    <span className="text-red font-medium" style={{color:"var(--red)"}}>⚠️ API no disponible para guardado masivo</span>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="glass-card admin-summary-card">
               <h4 className="admin-subtitle text-bebas">PARTICIPANTES ({parts.length})</h4>
               <div className="admin-users-list">
                 {parts.map(p=>{
@@ -1349,9 +1130,50 @@ export default function App() {
                 })}
               </div>
             </div>
+
+            <div className="search-filter-bar">
+              <input 
+                type="text" 
+                placeholder="🔍 Buscar país..." 
+                value={adminSearch}
+                onChange={e => setAdminSearch(e.target.value)}
+                className="search-input"
+              />
+              <select 
+                value={adminStatus} 
+                onChange={e => setAdminStatus(e.target.value)}
+                className="filter-select"
+              >
+                <option value="pending">⏳ Pendientes de resultado</option>
+                <option value="finished">✅ Finalizados</option>
+                <option value="all">Todos los partidos</option>
+              </select>
+            </div>
+
             <GF gs={GS} sel={grp} set={setGrp}/>
             <div className="fixtures-list">
-              {fm.map(m=><AMC key={m.id} m={m} onU={updResult}/>)}
+              {(() => {
+                const adminFilteredMatches = fm.filter(match => {
+                  const matchesSearch = adminSearch.trim() === "" ||
+                    match.team_home.toLowerCase().includes(adminSearch.toLowerCase()) ||
+                    match.team_away.toLowerCase().includes(adminSearch.toLowerCase());
+                    
+                  if (!matchesSearch) return false;
+                  
+                  if (adminStatus === "pending") {
+                    return !match.is_finished;
+                  }
+                  if (adminStatus === "finished") {
+                    return match.is_finished;
+                  }
+                  return true;
+                });
+                
+                return adminFilteredMatches.map(m => (
+                  <AMC key={m.id} m={m} onU={updResult}/>
+                ));
+              })()}
+              {fm.length === 0 && <div className="no-data">No hay partidos en este grupo</div>}
             </div>
           </div>
         )}
@@ -1377,9 +1199,31 @@ function GF({gs,sel,set}){
 }
 
 function AMC({m,onU}){
-  const [h,sH]=useState(m.score_home!==null?String(m.score_home):"");
-  const [a,sA]=useState(m.score_away!==null?String(m.score_away):"");
+  const [h,sH]=useState("");
+  const [a,sA]=useState("");
   
+  useEffect(() => {
+    sH(m.score_home !== null ? String(m.score_home) : "");
+    sA(m.score_away !== null ? String(m.score_away) : "");
+  }, [m.score_home, m.score_away]);
+
+  const decH = () => sH(prev => Math.max(0, (parseInt(prev) || 0) - 1).toString());
+  const incH = () => sH(prev => ((parseInt(prev) || 0) + 1).toString());
+  const decA = () => sA(prev => Math.max(0, (parseInt(prev) || 0) - 1).toString());
+  const incA = () => sA(prev => ((parseInt(prev) || 0) + 1).toString());
+
+  const handleSave = () => {
+    if(h!=="" && a!=="") {
+      onU(m.id, h, a);
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter") {
+      handleSave();
+    }
+  };
+
   let cardClass = "match-card";
   if (m.is_finished) {
     cardClass += " match-card-exact";
@@ -1397,10 +1241,36 @@ function AMC({m,onU}){
           <span className="flag-emoji large">{gf(m.team_home)}</span>
         </div>
         <div className="score-inputs-container">
-          <div className="inputs-row">
-            <input type="number" min="0" value={h} onChange={e=>sH(e.target.value)} className="score-box" placeholder="-"/>
+          <div className="inputs-row" style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <button onClick={decH} className="btn-secondary" style={{ padding: "4px 8px", fontSize: "11px", fontWeight: "bold" }}>-</button>
+              <input 
+                type="number" 
+                min="0" 
+                value={h} 
+                onChange={e=>sH(e.target.value)} 
+                onKeyDown={handleKeyDown}
+                className="score-box" 
+                placeholder="-"
+              />
+              <button onClick={incH} className="btn-secondary" style={{ padding: "4px 8px", fontSize: "11px", fontWeight: "bold" }}>+</button>
+            </div>
+            
             <span className="score-separator">:</span>
-            <input type="number" min="0" value={a} onChange={e=>sA(e.target.value)} className="score-box" placeholder="-"/>
+            
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <button onClick={decA} className="btn-secondary" style={{ padding: "4px 8px", fontSize: "11px", fontWeight: "bold" }}>-</button>
+              <input 
+                type="number" 
+                min="0" 
+                value={a} 
+                onChange={e=>sA(e.target.value)} 
+                onKeyDown={handleKeyDown}
+                className="score-box" 
+                placeholder="-"
+              />
+              <button onClick={incA} className="btn-secondary" style={{ padding: "4px 8px", fontSize: "11px", fontWeight: "bold" }}>+</button>
+            </div>
           </div>
         </div>
         <div className="team-away">
@@ -1409,7 +1279,7 @@ function AMC({m,onU}){
         </div>
       </div>
       <div className="match-card-actions">
-        <button onClick={()=>{if(h!==""&&a!=="")onU(m.id,h,a);}} className="btn-success btn-sm-action">{m.is_finished?"Actualizar resultado":"Registrar resultado"}</button>
+        <button onClick={handleSave} className="btn-success btn-sm-action">{m.is_finished?"Actualizar resultado":"Registrar resultado"}</button>
       </div>
     </div>
   );
