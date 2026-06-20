@@ -27,7 +27,20 @@ const FL = {
 };
 const gf = t => FL[t]||"🏳️";
 
-function calcPts(ph,pa,rh,ra){ if(rh===null||ra===null) return 0; if(ph===rh&&pa===ra) return 5; const p=ph>pa?"H":ph<pa?"A":"D", r=rh>ra?"H":rh<ra?"A":"D"; return p===r?3:0; }
+function calcPts(ph,pa,rh,ra,phase){ 
+  if(rh===null||ra===null) return 0; 
+  let base = 0;
+  if(ph===rh&&pa===ra) base = 5; 
+  else {
+    const p=ph>pa?"H":ph<pa?"A":"D", r=rh>ra?"H":rh<ra?"A":"D"; 
+    base = (p===r?3:0); 
+  }
+  let mult = 1;
+  if (phase === "r16") mult = 2;
+  else if (phase === "quarter") mult = 3;
+  else if (phase === "semi" || phase === "third" || phase === "final") mult = 4;
+  return base * mult;
+}
 
 const normalizeTeamName = (name) => {
   if (!name) return "";
@@ -558,8 +571,10 @@ export default function App() {
     if(!user?.is_admin) return;
     try { await supa(`matches?id=eq.${mid}`,{method:"PATCH",headers:{...hdrs,Prefer:"return=representation"},body:JSON.stringify({score_home:parseInt(sh),score_away:parseInt(sa),is_finished:true})});
       const freshPreds = await supa(`predictions?match_id=eq.${mid}`);
+      const matchObj = matches.find(m => m.id === mid);
+      const phase = matchObj?.phase || "group";
       for(const pr of (freshPreds||[])){
-        const pts=calcPts(pr.pred_home,pr.pred_away,parseInt(sh),parseInt(sa));
+        const pts=calcPts(pr.pred_home,pr.pred_away,parseInt(sh),parseInt(sa), phase);
         await supa(`predictions?id=eq.${pr.id}`,{method:"PATCH",body:JSON.stringify({points_earned:pts})});
       }
       await load(); setOk("Resultado y puntos actualizados ✓");
@@ -581,10 +596,11 @@ export default function App() {
       const m = mergedMatches.find(match => match.id === pr.match_id);
       if (!m) return;
       if (m.is_finished) {
-        const pPoints = calcPts(pr.pred_home, pr.pred_away, m.score_home, m.score_away);
+        const pPoints = calcPts(pr.pred_home, pr.pred_away, m.score_home, m.score_away, m.phase);
         pts += pPoints;
-        if (pPoints === 5) ex++;
-        else if (pPoints === 3) ac++;
+        const isExact = pr.pred_home === m.score_home && pr.pred_away === m.score_away;
+        if (isExact) ex++;
+        else if (pPoints > 0) ac++;
       }
     });
     return { ...p, pts, ex, ac, tp: pp.length };
@@ -963,16 +979,20 @@ export default function App() {
                   {filteredMatches.map(match=>{
                     const pred=getPred(match.id), locked=!!pred, draft=drafts[match.id]||{}, finished=match.is_finished, isLive=match.is_live;
                     let pts=null; 
+                    let isExact = false;
+                    let isWinner = false;
                     if ((finished || isLive) && pred) {
-                      pts = calcPts(pred.pred_home, pred.pred_away, match.score_home, match.score_away);
+                      pts = calcPts(pred.pred_home, pred.pred_away, match.score_home, match.score_away, match.phase);
+                      isExact = pred.pred_home === match.score_home && pred.pred_away === match.score_away;
+                      isWinner = !isExact && pts > 0;
                     }
                     
                     let matchCardClass = "match-card";
                     if(isLive){
                       matchCardClass += " match-card-live";
                     } else if(finished){
-                      if(pts===5) matchCardClass += " match-card-exact";
-                      else if(pts===3) matchCardClass += " match-card-winner";
+                      if(isExact) matchCardClass += " match-card-exact";
+                      else if(isWinner) matchCardClass += " match-card-winner";
                       else matchCardClass += " match-card-incorrect";
                     } else if(locked){
                       matchCardClass += " match-card-locked";
@@ -980,8 +1000,8 @@ export default function App() {
                     
                     let liveGlowClass = "";
                     if (isLive && pred) {
-                      if (pts === 5) liveGlowClass = "live-glow-exact";
-                      else if (pts === 3) liveGlowClass = "live-glow-winner";
+                      if (isExact) liveGlowClass = "live-glow-exact";
+                      else if (isWinner) liveGlowClass = "live-glow-winner";
                     }
 
                     return(
@@ -992,8 +1012,8 @@ export default function App() {
                             {isLive && <span className="live-minute-badge"> {match.time_elapsed}'</span>}
                           </span>
                           {isLive && <span className="badge badge-live">● EN VIVO</span>}
-                          {finished&&pts!==null&&<span className={`badge ${pts===5?'badge-success':pts===3?'badge-info':'badge-danger'} badge-pts-earned`}>{pts===5?"🎯 EXACTO +5":pts===3?"✓ +3":"✗ 0"}</span>}
-                          {isLive&&pts!==null&&pts>0&&<span className={`badge ${pts===5?'badge-success-glow':'badge-info-glow'} badge-pts-earned`}>{pts===5?"🎯 EXACTO +5 (Parcial)":"✓ +3 (Parcial)"}</span>}
+                          {finished&&pts!==null&&<span className={`badge ${isExact?'badge-success':isWinner?'badge-info':'badge-danger'} badge-pts-earned`}>{isExact?`🎯 EXACTO +${pts}`:isWinner?`✓ +${pts}`:"✗ 0"}</span>}
+                          {isLive&&pts!==null&&pts>0&&<span className={`badge ${isExact?'badge-success-glow':'badge-info-glow'} badge-pts-earned`}>{isExact?`🎯 EXACTO +${pts} (Parcial)`:`✓ +${pts} (Parcial)`}</span>}
                           {!finished&&!isLive&&locked&&<span className="badge badge-success">🔒 Enviado</span>}
                           {!finished&&!isLive&&!locked&&!draft.home&&!draft.away&&<span className="badge badge-neutral">Pendiente</span>}
                           {!finished&&!isLive&&!locked&&(draft.home!==undefined||draft.away!==undefined)&&<span className="badge badge-warning">Sin guardar</span>}
@@ -1395,23 +1415,30 @@ export default function App() {
                       );
                       const finished = match.is_finished;
                       const isLive = match.is_live;
-                      const pts = (finished || isLive) ? calcPts(pred.pred_home,pred.pred_away,match.score_home,match.score_away) : null;
+                      let pts = null;
+                      let isExact = false;
+                      let isWinner = false;
+                      if ((finished || isLive) && pred) {
+                        pts = calcPts(pred.pred_home, pred.pred_away, match.score_home, match.score_away, match.phase);
+                        isExact = pred.pred_home === match.score_home && pred.pred_away === match.score_away;
+                        isWinner = !isExact && pts > 0;
+                      }
                       
                       let matchCardClass = "match-card";
                       if(isLive){
                         matchCardClass += " match-card-live";
                       } else if(finished){
-                        if(pts===5) matchCardClass += " match-card-exact";
-                        else if(pts===3) matchCardClass += " match-card-winner";
+                        if(isExact) matchCardClass += " match-card-exact";
+                        else if(isWinner) matchCardClass += " match-card-winner";
                         else matchCardClass += " match-card-incorrect";
                       } else {
                         matchCardClass += " match-card-locked";
                       }
 
                       let liveGlowClass = "";
-                      if (isLive && pts) {
-                        if (pts === 5) liveGlowClass = "live-glow-exact";
-                        else if (pts === 3) liveGlowClass = "live-glow-winner";
+                      if (isLive && pred) {
+                        if (isExact) liveGlowClass = "live-glow-exact";
+                        else if (isWinner) liveGlowClass = "live-glow-winner";
                       }
 
                       return(
@@ -1422,8 +1449,8 @@ export default function App() {
                               {isLive && <span className="live-minute-badge"> {match.time_elapsed}'</span>}
                             </span>
                             {isLive && <span className="badge badge-live">● EN VIVO</span>}
-                            {finished&&pts!==null&&<span className={`badge ${pts===5?'badge-success':pts===3?'badge-info':'badge-danger'} badge-pts-earned`}>{pts===5?"🎯 +5":pts===3?"✓ +3":"✗ 0"}</span>}
-                            {isLive&&pts!==null&&pts>0&&<span className={`badge ${pts===5?'badge-success-glow':'badge-info-glow'} badge-pts-earned`}>{pts===5?"🎯 +5 (Parcial)":"✓ +3 (Parcial)"}</span>}
+                            {finished&&pts!==null&&<span className={`badge ${isExact?'badge-success':isWinner?'badge-info':'badge-danger'} badge-pts-earned`}>{isExact?`🎯 +${pts}`:isWinner?`✓ +${pts}`:"✗ 0"}</span>}
+                            {isLive&&pts!==null&&pts>0&&<span className={`badge ${isExact?'badge-success-glow':'badge-info-glow'} badge-pts-earned`}>{isExact?`🎯 +${pts} (Parcial)`:`✓ +${pts} (Parcial)`}</span>}
                             {!finished&&!isLive&&<span className="badge badge-success">🔒 Enviado</span>}
                           </div>
                           <div className="match-fixture-row">
