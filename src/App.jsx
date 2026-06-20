@@ -42,6 +42,61 @@ const normalizeTeamName = (name) => {
   if (n === "cote d ivoire" || n === "ivory coast") return "ivory coast";
   return n;
 };
+
+const assignThirds = (bestThirds) => {
+  const paddedThirds = [...bestThirds];
+  const allGroups = ["A","B","C","D","E","F","G","H","I","J","K","L"];
+  const usedGroupsInPadded = new Set(paddedThirds.map(t => t.group));
+  for (const g of allGroups) {
+    if (paddedThirds.length >= 8) break;
+    if (!usedGroupsInPadded.has(g)) {
+      paddedThirds.push({ name: `3° Grupo ${g}`, group: g });
+      usedGroupsInPadded.add(g);
+    }
+  }
+  while (paddedThirds.length < 8) {
+    paddedThirds.push({ name: `3° Reservado`, group: "A" });
+  }
+
+  const slots = [
+    { id: 74, allowed: ["A","B","C","D","F"], opponent: "E" },
+    { id: 77, allowed: ["C","D","F","G","H"], opponent: "I" },
+    { id: 79, allowed: ["C","E","F","H","I"], opponent: "A" },
+    { id: 80, allowed: ["E","H","I","J","K"], opponent: "L" },
+    { id: 81, allowed: ["B","E","F","I","J"], opponent: "D" },
+    { id: 82, allowed: ["A","E","H","I","J"], opponent: "G" },
+    { id: 85, allowed: ["E","F","G","I","J"], opponent: "B" },
+    { id: 87, allowed: ["D","E","I","J","L"], opponent: "K" }
+  ];
+
+  const assignment = {};
+  const usedIndices = new Set();
+
+  function backtrack(slotIdx) {
+    if (slotIdx === slots.length) return true;
+    const slot = slots[slotIdx];
+    for (let i = 0; i < paddedThirds.length; i++) {
+      if (usedIndices.has(i)) continue;
+      const team = paddedThirds[i];
+      if (slot.allowed.includes(team.group) && team.group !== slot.opponent) {
+        assignment[slot.id] = team;
+        usedIndices.add(i);
+        if (backtrack(slotIdx + 1)) return true;
+        usedIndices.delete(i);
+        delete assignment[slot.id];
+      }
+    }
+    return false;
+  }
+
+  const success = backtrack(0);
+  if (!success) {
+    for (let i = 0; i < slots.length; i++) {
+      assignment[slots[i].id] = paddedThirds[i];
+    }
+  }
+  return assignment;
+};
 function triggerConfetti() {
   const canvas = document.createElement("canvas");
   canvas.style.position = "fixed";
@@ -144,6 +199,301 @@ export default function App() {
 
   const [adminSearch, setAdminSearch] = useState("");
   const [adminStatus, setAdminStatus] = useState("pending");
+
+  const [simSource, setSimSource] = useState(() => {
+    return localStorage.getItem("sim_source") || "demo";
+  });
+  const [simWinners, setSimWinners] = useState(() => {
+    try {
+      const saved = localStorage.getItem("sim_winners");
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  const getR32TeamsAndMatches = useCallback((source) => {
+    const standingsFn = source === "real" ? getGroupStandings : getGroupStandingsPred;
+    const groups = ["A","B","C","D","E","F","G","H","I","J","K","L"];
+    const teamMap = {};
+    
+    if (source === "demo") {
+      groups.forEach(g => {
+        teamMap[`1${g}`] = { name: `1° Grupo ${g}`, group: g };
+        teamMap[`2${g}`] = { name: `2° Grupo ${g}`, group: g };
+      });
+      const dummyThirds = groups.slice(0, 8).map(g => ({ name: `3° Grupo ${g}`, group: g }));
+      const thirdsAssignment = assignThirds(dummyThirds);
+      Object.entries(thirdsAssignment).forEach(([matchId, team]) => {
+        teamMap[`3rd_${matchId}`] = team;
+      });
+    } else {
+      groups.forEach(g => {
+        const s = standingsFn(g);
+        teamMap[`1${g}`] = { name: s[0]?.name || `1° Grupo ${g}`, group: g };
+        teamMap[`2${g}`] = { name: s[1]?.name || `2° Grupo ${g}`, group: g };
+      });
+      const bt = getBestThirds(standingsFn);
+      const thirdsAssignment = assignThirds(bt);
+      Object.entries(thirdsAssignment).forEach(([matchId, team]) => {
+        teamMap[`3rd_${matchId}`] = team;
+      });
+    }
+    return teamMap;
+  }, [matches, allPreds]);
+
+  const resolveBracket = useCallback((source, winners) => {
+    const r32TeamMap = getR32TeamsAndMatches(source);
+    const matchesList = {};
+    const getW = (mid) => winners[mid] || null;
+    const getL = (mid) => {
+      const m = matchesList[mid];
+      if (!m || !m.winner) return null;
+      return m.winner === m.home ? m.away : m.home;
+    };
+
+    const r32Defs = [
+      { id: 73, h: "2A", a: "2B" },
+      { id: 74, h: "1E", a: "3rd_74" },
+      { id: 75, h: "1F", a: "2C" },
+      { id: 76, h: "1C", a: "2F" },
+      { id: 77, h: "1I", a: "3rd_77" },
+      { id: 78, h: "2E", a: "2I" },
+      { id: 79, h: "1A", a: "3rd_79" },
+      { id: 80, h: "1L", a: "3rd_80" },
+      { id: 81, h: "1D", a: "3rd_81" },
+      { id: 82, h: "1G", a: "3rd_82" },
+      { id: 83, h: "2K", a: "2L" },
+      { id: 84, h: "1H", a: "2J" },
+      { id: 85, h: "1B", a: "3rd_85" },
+      { id: 86, h: "1J", a: "2H" },
+      { id: 87, h: "1K", a: "3rd_87" },
+      { id: 88, h: "2D", a: "2G" }
+    ];
+
+    r32Defs.forEach(d => {
+      matchesList[d.id] = {
+        id: d.id,
+        home: r32TeamMap[d.h]?.name || `2° ${d.h[1]}`,
+        away: r32TeamMap[d.a]?.name || `3° ${d.a.split("_")[1] || ""}`,
+        winner: getW(d.id)
+      };
+    });
+
+    const r16Defs = [
+      { id: 89, h: 74, a: 77 },
+      { id: 90, h: 73, a: 75 },
+      { id: 91, h: 76, a: 78 },
+      { id: 92, h: 79, a: 80 },
+      { id: 93, h: 83, a: 84 },
+      { id: 94, h: 81, a: 82 },
+      { id: 95, h: 86, a: 88 },
+      { id: 96, h: 85, a: 87 }
+    ];
+
+    r16Defs.forEach(d => {
+      const hTeam = getW(d.h);
+      const aTeam = getW(d.a);
+      matchesList[d.id] = {
+        id: d.id,
+        home: hTeam || `Ganador P${d.h}`,
+        away: aTeam || `Ganador P${d.a}`,
+        winner: getW(d.id),
+        hasInputs: !!(hTeam && aTeam)
+      };
+    });
+
+    const qfDefs = [
+      { id: 97, h: 89, a: 90 },
+      { id: 98, h: 93, a: 94 },
+      { id: 99, h: 91, a: 92 },
+      { id: 100, h: 95, a: 96 }
+    ];
+
+    qfDefs.forEach(d => {
+      const hTeam = getW(d.h);
+      const aTeam = getW(d.a);
+      matchesList[d.id] = {
+        id: d.id,
+        home: hTeam || `Ganador P${d.h}`,
+        away: aTeam || `Ganador P${d.a}`,
+        winner: getW(d.id),
+        hasInputs: !!(hTeam && aTeam)
+      };
+    });
+
+    const sfDefs = [
+      { id: 101, h: 97, a: 98 },
+      { id: 102, h: 99, a: 100 }
+    ];
+
+    sfDefs.forEach(d => {
+      const hTeam = getW(d.h);
+      const aTeam = getW(d.a);
+      matchesList[d.id] = {
+        id: d.id,
+        home: hTeam || `Ganador P${d.h}`,
+        away: aTeam || `Ganador P${d.a}`,
+        winner: getW(d.id),
+        hasInputs: !!(hTeam && aTeam)
+      };
+    });
+
+    const h3 = getL(101);
+    const a3 = getL(102);
+    matchesList[103] = {
+      id: 103,
+      home: h3 || `Perdedor P101`,
+      away: a3 || `Perdedor P102`,
+      winner: getW(103),
+      hasInputs: !!(h3 && a3)
+    };
+
+    const hF = getW(101);
+    const aF = getW(102);
+    matchesList[104] = {
+      id: 104,
+      home: hF || `Ganador P101`,
+      away: aF || `Ganador P102`,
+      winner: getW(104),
+      hasInputs: !!(hF && aF)
+    };
+
+    return matchesList;
+  }, [getR32TeamsAndMatches]);
+
+  const handleSimWinnerClick = (matchId, teamName) => {
+    if (!teamName || teamName.startsWith("Ganador P") || teamName.startsWith("Perdedor P")) return;
+    setSimWinners(prev => {
+      const updated = { ...prev };
+      if (updated[matchId] === teamName) {
+        delete updated[matchId];
+      } else {
+        updated[matchId] = teamName;
+      }
+      
+      let changed = true;
+      while (changed) {
+        changed = false;
+        const tempResolved = resolveBracket(simSource, updated);
+        for (const [mid, data] of Object.entries(tempResolved)) {
+          if (updated[mid] && updated[mid] !== data.home && updated[mid] !== data.away) {
+            delete updated[mid];
+            changed = true;
+          }
+        }
+      }
+      localStorage.setItem("sim_winners", JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const handleSimSourceChange = (src) => {
+    setSimSource(src);
+    localStorage.setItem("sim_source", src);
+    setSimWinners({});
+    localStorage.setItem("sim_winners", JSON.stringify({}));
+  };
+
+  const publishKnockoutMatches = async () => {
+    const confirm = window.confirm("¿Estás seguro de que quieres publicar los partidos de eliminación directa en la base de datos? Esto permitirá a los usuarios ingresar sus predicciones.");
+    if (!confirm) return;
+    
+    const r32TeamMap = getR32TeamsAndMatches("real");
+    
+    const r32Defs = [
+      { id: 73, h: "2A", a: "2B", date: "2026-06-28" },
+      { id: 74, h: "1E", a: "3rd_74", date: "2026-06-29" },
+      { id: 75, h: "1F", a: "2C", date: "2026-06-29" },
+      { id: 76, h: "1C", a: "2F", date: "2026-06-29" },
+      { id: 77, h: "1I", a: "3rd_77", date: "2026-06-30" },
+      { id: 78, h: "2E", a: "2I", date: "2026-06-30" },
+      { id: 79, h: "1A", a: "3rd_79", date: "2026-06-30" },
+      { id: 80, h: "1L", a: "3rd_80", date: "2026-07-01" },
+      { id: 81, h: "1D", a: "3rd_81", date: "2026-07-01" },
+      { id: 82, h: "1G", a: "3rd_82", date: "2026-07-01" },
+      { id: 83, h: "2K", a: "2L", date: "2026-07-02" },
+      { id: 84, h: "1H", a: "2J", date: "2026-07-02" },
+      { id: 85, h: "1B", a: "3rd_85", date: "2026-07-02" },
+      { id: 86, h: "1J", a: "2H", date: "2026-07-03" },
+      { id: 87, h: "1K", a: "3rd_87", date: "2026-07-03" },
+      { id: 88, h: "2D", a: "2G", date: "2026-07-03" }
+    ];
+
+    const otherDefs = [
+      { id: 89, h: "Ganador P74", a: "Ganador P77", date: "2026-07-04", phase: "r16" },
+      { id: 90, h: "Ganador P73", a: "Ganador P75", date: "2026-07-04", phase: "r16" },
+      { id: 91, h: "Ganador P76", a: "Ganador P78", date: "2026-07-05", phase: "r16" },
+      { id: 92, h: "Ganador P79", a: "Ganador P80", date: "2026-07-05", phase: "r16" },
+      { id: 93, h: "Ganador P83", a: "Ganador P84", date: "2026-07-06", phase: "r16" },
+      { id: 94, h: "Ganador P81", a: "Ganador P82", date: "2026-07-06", phase: "r16" },
+      { id: 95, h: "Ganador P86", a: "Ganador P88", date: "2026-07-07", phase: "r16" },
+      { id: 96, h: "Ganador P85", a: "Ganador P87", date: "2026-07-07", phase: "r16" },
+      
+      { id: 97, h: "Ganador P89", a: "Ganador P90", date: "2026-07-09", phase: "quarter" },
+      { id: 98, h: "Ganador P93", a: "Ganador P94", date: "2026-07-10", phase: "quarter" },
+      { id: 99, h: "Ganador P91", a: "Ganador P92", date: "2026-07-11", phase: "quarter" },
+      { id: 100, h: "Ganador P95", a: "Ganador P96", date: "2026-07-11", phase: "quarter" },
+      
+      { id: 101, h: "Ganador P97", a: "Ganador P98", date: "2026-07-14", phase: "semi" },
+      { id: 102, h: "Ganador P99", a: "Ganador P100", date: "2026-07-15", phase: "semi" },
+      
+      { id: 103, h: "Perdedor P101", a: "Perdedor P102", date: "2026-07-18", phase: "third" },
+      { id: 104, h: "Ganador P101", a: "Ganador P102", date: "2026-07-19", phase: "final" }
+    ];
+
+    setSending(true);
+    try {
+      const existing = await supa("matches?match_number=gte.73");
+      if (existing && existing.length > 0) {
+        alert("Los partidos de eliminación directa ya están publicados en la base de datos.");
+        setSending(false);
+        return;
+      }
+      
+      const payload = [];
+      r32Defs.forEach(d => {
+        payload.push({
+          id: d.id,
+          match_number: d.id,
+          group_name: null,
+          team_home: r32TeamMap[d.h]?.name || `2° ${d.h[1]}`,
+          team_away: r32TeamMap[d.a]?.name || `3° ${d.a.split("_")[1] || ""}`,
+          match_date: d.date,
+          phase: "r32",
+          score_home: null,
+          score_away: null,
+          is_finished: false
+        });
+      });
+      
+      otherDefs.forEach(d => {
+        payload.push({
+          id: d.id,
+          match_number: d.id,
+          group_name: null,
+          team_home: d.h,
+          team_away: d.a,
+          match_date: d.date,
+          phase: d.phase,
+          score_home: null,
+          score_away: null,
+          is_finished: false
+        });
+      });
+
+      await supa("matches", {
+        method: "POST",
+        body: JSON.stringify(payload)
+      });
+      
+      alert("¡Partidos de eliminación directa publicados con éxito!");
+      load();
+    } catch (e) {
+      alert("Error al publicar partidos: " + e.message);
+    }
+    setSending(false);
+  };
 
   const load = useCallback(async () => {
     try {
@@ -391,7 +741,7 @@ export default function App() {
       {/* Nav */}
       <nav className="nav-bar">
         <div className="nav-inner nav-container">
-          {[{id:"ranking",l:"🏅 Ranking",s:true},{id:"predictions",l:"📝 Predicciones",s:true},{id:"groups",l:"⚽ Grupos",s:true},{id:"results",l:"📊 Resultados",s:true},{id:"transparency",l:"👁️ Quinielas",s:true},{id:"admin",l:"👑 Admin",s:user.is_admin}].filter(t=>t.s).map(tab=>(
+          {[{id:"ranking",l:"🏅 Ranking",s:true},{id:"predictions",l:"📝 Predicciones",s:true},{id:"groups",l:"⚽ Grupos",s:true},{id:"results",l:"📊 Resultados",s:true},{id:"transparency",l:"👁️ Quinielas",s:true},{id:"brackets",l:"🌳 Sim. Brackets",s:user.is_admin},{id:"admin",l:"👑 Admin",s:user.is_admin}].filter(t=>t.s).map(tab=>(
             <button key={tab.id} onClick={()=>{setView(tab.id); setSearchQuery(""); setStatusFilter("all"); setCompareMode(false);}} className={`nav-btn ${view===tab.id?'active':''}`}>{tab.l}</button>
           ))}
         </div>
@@ -1107,6 +1457,167 @@ export default function App() {
                 <div className="text-dim font-medium">Seleccioná un participante para ver sus predicciones</div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* BRACKETS SIMULATOR */}
+        {view==="brackets"&&user.is_admin&&(
+          <div className="view-brackets fade-in">
+            <div className="view-header-row" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "12px" }}>
+              <h3 className="section-title text-bebas" style={{ margin: 0 }}>🌳 SIMULADOR DE BRACKETS</h3>
+              <div style={{ display: "flex", gap: "10px" }}>
+                <button onClick={publishKnockoutMatches} disabled={sending} className="btn-success">
+                  {sending ? "Publicando..." : "Publicar Bracket Oficial 🔒"}
+                </button>
+                <button onClick={() => { if(window.confirm("¿Restablecer la simulación?")) { setSimWinners({}); localStorage.setItem("sim_winners", "{}"); } }} className="btn-secondary">
+                  Restablecer 🗑️
+                </button>
+              </div>
+            </div>
+            <p className="section-subtitle">Simulación interactiva de las rondas de eliminación. Hacé clic en un equipo para avanzarlo.</p>
+
+            <div className="sim-source-selector" style={{ marginBottom: "24px", display: "flex", gap: "10px", flexWrap: "wrap" }}>
+              <span style={{ display: "flex", alignItems: "center", fontWeight: "bold", fontSize: "14px", color: "var(--text-dim)", marginRight: "10px" }}>Origen de los equipos R32:</span>
+              <button onClick={() => handleSimSourceChange("demo")} className={`btn-tab-pill ${simSource==="demo"?'active':''}`}>Modo Demo (Ficticios)</button>
+              <button onClick={() => handleSimSourceChange("real")} className={`btn-tab-pill ${simSource==="real"?'active':''}`}>Standings Reales</button>
+              <button onClick={() => handleSimSourceChange("pred")} className={`btn-tab-pill ${simSource==="pred"?'active':''}`}>Standings Mis Pred.</button>
+            </div>
+
+            {(() => {
+              const res = resolveBracket(simSource, simWinners);
+              
+              // Define standard order for symmetrical layout
+              const leftR32 = [73, 75, 74, 77, 83, 84, 81, 82];
+              const leftR16 = [90, 89, 93, 94];
+              const leftQF  = [97, 98];
+              const leftSF  = [101];
+
+              const rightR32 = [76, 78, 79, 80, 86, 88, 85, 87];
+              const rightR16 = [91, 92, 95, 96];
+              const rightQF  = [99, 100];
+              const rightSF  = [102];
+
+              const renderMatch = (matchId) => {
+                const m = res[matchId];
+                if (!m) return null;
+                const isHomeW = m.winner === m.home && m.winner !== null;
+                const isAwayW = m.winner === m.away && m.winner !== null;
+                
+                const isHomePlaceholder = !m.home || m.home.startsWith("Ganador P") || m.home.startsWith("Perdedor P");
+                const isAwayPlaceholder = !m.away || m.away.startsWith("Ganador P") || m.away.startsWith("Perdedor P");
+                
+                return (
+                  <div key={m.id} className={`bracket-match-card ${m.winner ? "has-winner" : ""}`}>
+                    <div className="bracket-match-num">Match #{m.id}</div>
+                    <div className="bracket-match-teams">
+                      <div 
+                        onClick={() => !isHomePlaceholder && handleSimWinnerClick(m.id, m.home)}
+                        className={`bracket-team-row ${isHomeW ? "is-winner" : ""} ${isHomePlaceholder ? "is-placeholder" : ""}`}
+                      >
+                        <span className="flag-emoji">{!isHomePlaceholder ? gf(m.home) : "🏳️"}</span>
+                        <span className="team-name" title={m.home}>{m.home}</span>
+                        {isHomeW && <span className="winner-indicator">✓</span>}
+                      </div>
+                      <div 
+                        onClick={() => !isAwayPlaceholder && handleSimWinnerClick(m.id, m.away)}
+                        className={`bracket-team-row ${isAwayW ? "is-winner" : ""} ${isAwayPlaceholder ? "is-placeholder" : ""}`}
+                      >
+                        <span className="flag-emoji">{!isAwayPlaceholder ? gf(m.away) : "🏳️"}</span>
+                        <span className="team-name" title={m.away}>{m.away}</span>
+                        {isAwayW && <span className="winner-indicator">✓</span>}
+                      </div>
+                    </div>
+                  </div>
+                );
+              };
+
+              return (
+                <div className="bracket-viewport">
+                  <div className="bracket-container">
+                    
+                    {/* LEFT R32 */}
+                    <div className="bracket-col col-r32">
+                      <div className="bracket-col-title">R32 (Izq)</div>
+                      <div className="bracket-col-matches">
+                        {leftR32.map(id => renderMatch(id))}
+                      </div>
+                    </div>
+
+                    {/* LEFT R16 */}
+                    <div className="bracket-col col-r16">
+                      <div className="bracket-col-title">Octavos (Izq)</div>
+                      <div className="bracket-col-matches">
+                        {leftR16.map(id => renderMatch(id))}
+                      </div>
+                    </div>
+
+                    {/* LEFT QF */}
+                    <div className="bracket-col col-qf">
+                      <div className="bracket-col-title">Cuartos (Izq)</div>
+                      <div className="bracket-col-matches">
+                        {leftQF.map(id => renderMatch(id))}
+                      </div>
+                    </div>
+
+                    {/* LEFT SF */}
+                    <div className="bracket-col col-sf">
+                      <div className="bracket-col-title">Semis (Izq)</div>
+                      <div className="bracket-col-matches">
+                        {leftSF.map(id => renderMatch(id))}
+                      </div>
+                    </div>
+
+                    {/* FINALS CENTER */}
+                    <div className="bracket-col col-finals">
+                      <div className="bracket-col-title">Finales</div>
+                      <div className="bracket-col-matches finals-matches">
+                        <div className="finals-group">
+                          <div className="finals-title gold-text">🏆 FINAL</div>
+                          {renderMatch(104)}
+                        </div>
+                        <div className="finals-group">
+                          <div className="finals-title text-dim">🥉 TERCER PUESTO</div>
+                          {renderMatch(103)}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* RIGHT SF */}
+                    <div className="bracket-col col-sf">
+                      <div className="bracket-col-title">Semis (Der)</div>
+                      <div className="bracket-col-matches">
+                        {rightSF.map(id => renderMatch(id))}
+                      </div>
+                    </div>
+
+                    {/* RIGHT QF */}
+                    <div className="bracket-col col-qf">
+                      <div className="bracket-col-title">Cuartos (Der)</div>
+                      <div className="bracket-col-matches">
+                        {rightQF.map(id => renderMatch(id))}
+                      </div>
+                    </div>
+
+                    {/* RIGHT R16 */}
+                    <div className="bracket-col col-r16">
+                      <div className="bracket-col-title">Octavos (Der)</div>
+                      <div className="bracket-col-matches">
+                        {rightR16.map(id => renderMatch(id))}
+                      </div>
+                    </div>
+
+                    {/* RIGHT R32 */}
+                    <div className="bracket-col col-r32">
+                      <div className="bracket-col-title">R32 (Der)</div>
+                      <div className="bracket-col-matches">
+                        {rightR32.map(id => renderMatch(id))}
+                      </div>
+                    </div>
+
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         )}
 
