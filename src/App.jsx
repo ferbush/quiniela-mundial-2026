@@ -12,20 +12,67 @@ async function supa(path, opts={}) {
 }
 
 const FL = {
-  Mexico:"🇲🇽","South Africa":"🇿🇦","South Korea":"🇰🇷",Czechia:"🇨🇿",
-  Canada:"🇨🇦","Bosnia-Herzegovina":"🇧🇦",Qatar:"🇶🇦",Switzerland:"🇨🇭",
-  Brazil:"🇧🇷",Morocco:"🇲🇦",Haiti:"🇭🇹",Scotland:"🏴󠁧󠁢󠁳󠁣󠁴󠁿",
-  "United States":"🇺🇸",Paraguay:"🇵🇾",Australia:"🇦🇺",Turkey:"🇹🇷",
-  Germany:"🇩🇪",Curacao:"🇨🇼","Ivory Coast":"🇨🇮",Ecuador:"🇪🇨",
-  Netherlands:"🇳🇱",Japan:"🇯🇵",Sweden:"🇸🇪",Tunisia:"🇹🇳",
-  Belgium:"🇧🇪",Egypt:"🇪🇬",Iran:"🇮🇷","New Zealand":"🇳🇿",
-  Spain:"🇪🇸","Cape Verde":"🇨🇻","Saudi Arabia":"🇸🇦",Uruguay:"🇺🇾",
-  France:"🇫🇷",Senegal:"🇸🇳",Iraq:"🇮🇶",Norway:"🇳🇴",
-  Argentina:"🇦🇷",Algeria:"🇩🇿",Austria:"🇦🇹",Jordan:"🇯🇴",
-  Portugal:"🇵🇹","DR Congo":"🇨🇩",Uzbekistan:"🇺🇿",Colombia:"🇨🇴",
-  England:"🏴󠁧󠁢󠁥󠁮󠁧󠁿",Croatia:"🇭🇷",Ghana:"🇬🇭",Panama:"🇵🇦",
+  Mexico: "mx",
+  "South Africa": "za",
+  "South Korea": "kr",
+  Czechia: "cz",
+  Canada: "ca",
+  "Bosnia-Herzegovina": "ba",
+  Qatar: "qa",
+  Switzerland: "ch",
+  Brazil: "br",
+  Morocco: "ma",
+  Haiti: "ht",
+  Scotland: "gb-sct",
+  "United States": "us",
+  Paraguay: "py",
+  Australia: "au",
+  Turkey: "tr",
+  Germany: "de",
+  Curacao: "cw",
+  "Ivory Coast": "ci",
+  Ecuador: "ec",
+  Netherlands: "nl",
+  Japan: "jp",
+  Sweden: "se",
+  Tunisia: "tn",
+  Belgium: "be",
+  Egypt: "eg",
+  Iran: "ir",
+  "New Zealand": "nz",
+  Spain: "es",
+  "Cape Verde": "cv",
+  "Saudi Arabia": "sa",
+  Uruguay: "uy",
+  France: "fr",
+  Senegal: "sn",
+  Iraq: "iq",
+  Norway: "no",
+  Argentina: "ar",
+  Algeria: "dz",
+  Austria: "at",
+  Jordan: "jo",
+  Portugal: "pt",
+  "DR Congo": "cd",
+  Uzbekistan: "uz",
+  Colombia: "co",
+  England: "gb-eng",
+  Croatia: "hr",
+  Ghana: "gh",
+  Panama: "pa"
 };
-const gf = t => FL[t]||"🏳️";
+
+const gf = t => {
+  const code = FL[t];
+  if (!code) return "🏳️";
+  return (
+    <img 
+      src={`https://flagcdn.com/${code}.svg`} 
+      alt={t} 
+      style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "50%" }} 
+    />
+  );
+};
 
 function calcPts(ph,pa,rh,ra,phase){ 
   if(rh===null||ra===null) return 0; 

@@ -1059,6 +1059,7 @@ body {
   font-size: 22px;
   border: 1.5px solid rgba(255, 255, 255, 0.1);
   line-height: 1;
+  overflow: hidden;
 }
 .flag-emoji.large {
   width: 46px;
