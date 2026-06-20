@@ -259,13 +259,6 @@ export default function App() {
 
   const [adminSearch, setAdminSearch] = useState("");
   const [adminStatus, setAdminStatus] = useState("pending");
-  const [quickDate, setQuickDate] = useState(() => {
-    const d = new Date();
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
-  });
 
   const [simSource, setSimSource] = useState(() => {
     return localStorage.getItem("sim_source") || "demo";
@@ -641,16 +634,42 @@ export default function App() {
     time_elapsed: dbMatch.is_finished ? "finished" : "notstarted"
   }));
 
-  const getClosestPendingDate = () => {
-    const pending = mergedMatches.filter(m => !m.is_finished);
-    if (pending.length > 0) {
-      const dates = [...new Set(pending.map(m => m.match_date))].sort();
-      return dates[0];
+  const getQuickMatches = () => {
+    const todayStr = (() => {
+      const d = new Date();
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    })();
+
+    const activeMatches = mergedMatches.filter(m => {
+      if (m.match_date === todayStr) return true;
+      if (!m.is_finished && m.match_date < todayStr) return true;
+      return false;
+    });
+
+    if (activeMatches.length > 0) {
+      return activeMatches;
     }
-    return null;
+
+    const upcomingPending = mergedMatches.filter(m => !m.is_finished && m.match_date > todayStr);
+    if (upcomingPending.length > 0) {
+      const dates = [...new Set(upcomingPending.map(m => m.match_date))].sort();
+      const closestDate = dates[0];
+      return mergedMatches.filter(m => m.match_date === closestDate);
+    }
+
+    if (mergedMatches.length > 0) {
+      const dates = [...new Set(mergedMatches.map(m => m.match_date))].sort();
+      const lastDate = dates[dates.length - 1];
+      return mergedMatches.filter(m => m.match_date === lastDate);
+    }
+
+    return [];
   };
 
-  const quickMatches = mergedMatches.filter(m => m.match_date === quickDate);
+  const quickMatches = getQuickMatches();
 
   const ranking = parts.map(p => {
     const pp = allPreds.filter(pr => pr.participant_id === p.id);
@@ -835,73 +854,20 @@ export default function App() {
         {/* RANKING */}
         {view==="ranking"&&(
           <div className="view-ranking fade-in">
-            {user?.is_admin && (
+            {user?.is_admin && quickMatches.length > 0 && (
               <div className="glass-card admin-quick-entry-card" style={{ marginBottom: 24, border: "1px solid rgba(245, 51, 255, 0.25)", padding: "20px 24px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <span style={{ fontSize: 24 }}>⚡</span>
-                    <h3 className="section-title text-bebas" style={{ margin: 0, color: "var(--pink)" }}>REGISTRO RÁPIDO DE RESULTADOS</h3>
+                    <h3 className="section-title text-bebas" style={{ margin: 0, color: "var(--pink)" }}>REGISTRO RÁPIDO (HOY Y PENDIENTES)</h3>
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <button 
-                      onClick={() => {
-                        const d = new Date();
-                        const y = d.getFullYear();
-                        const m = String(d.getMonth() + 1).padStart(2, "0");
-                        const day = String(d.getDate()).padStart(2, "0");
-                        setQuickDate(`${y}-${m}-${day}`);
-                      }}
-                      className="btn-secondary" 
-                      style={{ padding: "6px 12px", fontSize: "12px" }}
-                    >
-                      Hoy
-                    </button>
-                    {(() => {
-                      const cpDate = getClosestPendingDate();
-                      return cpDate && cpDate !== quickDate ? (
-                        <button 
-                          onClick={() => setQuickDate(cpDate)}
-                          className="btn-secondary" 
-                          style={{ padding: "6px 12px", fontSize: "12px", color: "var(--accent)", borderColor: "var(--accent)" }}
-                        >
-                          Ir a Pendientes ⏳
-                        </button>
-                      ) : null;
-                    })()}
-                    <input 
-                      type="date" 
-                      value={quickDate} 
-                      onChange={e => setQuickDate(e.target.value)} 
-                      className="search-input" 
-                      style={{ padding: "6px 12px", width: "auto", minWidth: "140px", fontSize: "13px", margin: 0 }}
-                    />
-                  </div>
+                  <span className="badge badge-warning">👑 Modo Admin</span>
                 </div>
 
                 <div className="fixtures-list">
-                  {quickMatches.length > 0 ? (
-                    quickMatches.map(m => (
-                      <AMC key={m.id} m={m} onU={updResult} />
-                    ))
-                  ) : (
-                    <div className="no-data" style={{ padding: "20px", fontSize: "14px" }}>
-                      No hay partidos programados para el {quickDate}.
-                      {(() => {
-                        const cpDate = getClosestPendingDate();
-                        return cpDate ? (
-                          <div style={{ marginTop: 10 }}>
-                            <button 
-                              onClick={() => setQuickDate(cpDate)}
-                              className="btn-link"
-                              style={{ fontSize: "13px" }}
-                            >
-                              👉 Ir a la fecha con partidos pendientes más cercanos ({cpDate})
-                            </button>
-                          </div>
-                        ) : null;
-                      })()}
-                    </div>
-                  )}
+                  {quickMatches.map(m => (
+                    <AMC key={m.id} m={m} onU={updResult} />
+                  ))}
                 </div>
               </div>
             )}
@@ -1917,7 +1883,7 @@ function AMC({m,onU}){
         <div className="score-inputs-container">
           <div className="inputs-row" style={{ display: "flex", gap: "12px", alignItems: "center" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-              <button onClick={decH} className="btn-secondary" style={{ padding: "4px 8px", fontSize: "11px", fontWeight: "bold" }}>-</button>
+              <button onClick={decH} className="btn-secondary admin-adjust-btn" style={{ padding: "4px 8px", fontSize: "11px", fontWeight: "bold" }}>-</button>
               <input 
                 type="number" 
                 min="0" 
@@ -1927,13 +1893,13 @@ function AMC({m,onU}){
                 className="score-box" 
                 placeholder="-"
               />
-              <button onClick={incH} className="btn-secondary" style={{ padding: "4px 8px", fontSize: "11px", fontWeight: "bold" }}>+</button>
+              <button onClick={incH} className="btn-secondary admin-adjust-btn" style={{ padding: "4px 8px", fontSize: "11px", fontWeight: "bold" }}>+</button>
             </div>
             
             <span className="score-separator">:</span>
             
             <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-              <button onClick={decA} className="btn-secondary" style={{ padding: "4px 8px", fontSize: "11px", fontWeight: "bold" }}>-</button>
+              <button onClick={decA} className="btn-secondary admin-adjust-btn" style={{ padding: "4px 8px", fontSize: "11px", fontWeight: "bold" }}>-</button>
               <input 
                 type="number" 
                 min="0" 
@@ -1943,7 +1909,7 @@ function AMC({m,onU}){
                 className="score-box" 
                 placeholder="-"
               />
-              <button onClick={incA} className="btn-secondary" style={{ padding: "4px 8px", fontSize: "11px", fontWeight: "bold" }}>+</button>
+              <button onClick={incA} className="btn-secondary admin-adjust-btn" style={{ padding: "4px 8px", fontSize: "11px", fontWeight: "bold" }}>+</button>
             </div>
           </div>
         </div>

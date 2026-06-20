@@ -1596,6 +1596,9 @@ body {
 
 /* --- Mobile Responsive overrides --- */
 @media (max-width: 640px) {
+  .admin-adjust-btn {
+    display: none !important;
+  }
   .header-inner {
     padding: 12px 16px;
   }
