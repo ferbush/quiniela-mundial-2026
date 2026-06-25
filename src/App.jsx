@@ -74,19 +74,413 @@ const gf = t => {
   );
 };
 
-function calcPts(ph,pa,rh,ra,phase){ 
-  if(rh===null||ra===null) return 0; 
-  let base = 0;
-  if(ph===rh&&pa===ra) base = 5; 
-  else {
-    const p=ph>pa?"H":ph<pa?"A":"D", r=rh>ra?"H":rh<ra?"A":"D"; 
-    base = (p===r?3:0); 
+const matchParents = {
+  89: [74, 77],
+  90: [73, 75],
+  91: [76, 78],
+  92: [79, 80],
+  93: [83, 84],
+  94: [81, 82],
+  95: [86, 88],
+  96: [85, 87],
+  97: [89, 90],
+  98: [93, 94],
+  99: [91, 92],
+  100: [95, 96],
+  101: [97, 98],
+  102: [99, 100],
+  103: [101, 102],
+  104: [101, 102]
+};
+
+const matchChildren = {
+  73: { id: 90, slot: "home" },
+  74: { id: 89, slot: "home" },
+  75: { id: 90, slot: "away" },
+  76: { id: 91, slot: "home" },
+  77: { id: 89, slot: "away" },
+  78: { id: 91, slot: "away" },
+  79: { id: 92, slot: "home" },
+  80: { id: 92, slot: "away" },
+  81: { id: 94, slot: "home" },
+  82: { id: 94, slot: "away" },
+  83: { id: 93, slot: "home" },
+  84: { id: 93, slot: "away" },
+  85: { id: 96, slot: "home" },
+  86: { id: 95, slot: "home" },
+  87: { id: 96, slot: "away" },
+  88: { id: 95, slot: "away" },
+  89: { id: 97, slot: "home" },
+  90: { id: 97, slot: "away" },
+  91: { id: 99, slot: "home" },
+  92: { id: 99, slot: "away" },
+  93: { id: 98, slot: "home" },
+  94: { id: 98, slot: "away" },
+  95: { id: 100, slot: "home" },
+  96: { id: 100, slot: "away" },
+  97: { id: 101, slot: "home" },
+  98: { id: 101, slot: "away" },
+  99: { id: 102, slot: "home" },
+  100: { id: 102, slot: "away" }
+};
+
+function getAncestors(mid) {
+  const list = [];
+  const queue = [...(matchParents[mid] || [])];
+  while (queue.length > 0) {
+    const curr = queue.shift();
+    if (!list.includes(curr)) {
+      list.push(curr);
+      const parents = matchParents[curr] || [];
+      queue.push(...parents);
+    }
   }
-  let mult = 1;
-  if (phase === "r16") mult = 2;
-  else if (phase === "quarter") mult = 3;
-  else if (phase === "semi" || phase === "third" || phase === "final") mult = 4;
-  return base * mult;
+  return list;
+}
+
+function decodeScore(val) {
+  if (val === null || val === undefined || val === "") return null;
+  const num = parseInt(val);
+  if (isNaN(num)) return null;
+  return num >= 100 ? num - 100 : num;
+}
+
+function decodePrediction(pred_home, pred_away) {
+  if (pred_home === null || pred_away === null || pred_home === undefined || pred_away === undefined) return null;
+  let h = parseInt(pred_home);
+  let a = parseInt(pred_away);
+  if (isNaN(h) || isNaN(a)) return null;
+  let winnerIsHome = null;
+  if (h >= 100) {
+    h -= 100;
+    winnerIsHome = true;
+  } else if (a >= 100) {
+    a -= 100;
+    winnerIsHome = false;
+  } else if (h > a) {
+    winnerIsHome = true;
+  } else if (h < a) {
+    winnerIsHome = false;
+  }
+  return { homeScore: h, awayScore: a, winnerIsHome };
+}
+
+function getWinnerSide(hVal, aVal) {
+  if (hVal === null || aVal === null || hVal === undefined || aVal === undefined) return null;
+  const h = parseInt(hVal);
+  const a = parseInt(aVal);
+  if (h >= 100) return "home";
+  if (a >= 100) return "away";
+  if (h > a) return "home";
+  if (h < a) return "away";
+  return null;
+}
+
+function getRealWinnerTeam(m, matchesList) {
+  if (!m || !m.is_finished || m.score_home === null || m.score_away === null) return null;
+  if (m.score_home > m.score_away) return m.team_home;
+  if (m.score_home < m.score_away) return m.team_away;
+  
+  const child = matchChildren[m.id];
+  if (child) {
+    const childMatch = matchesList.find(match => match.id === child.id);
+    if (childMatch) {
+      const expectedTeam = child.slot === "home" ? childMatch.team_home : childMatch.team_away;
+      if (expectedTeam === m.team_home || expectedTeam === m.team_away) {
+        return expectedTeam;
+      }
+    }
+  }
+  if (m.id === 101 || m.id === 102) {
+    const finalMatch = matchesList.find(match => match.id === 104);
+    if (finalMatch) {
+      if (finalMatch.team_home === m.team_home || finalMatch.team_home === m.team_away) return finalMatch.team_home;
+      if (finalMatch.team_away === m.team_home || finalMatch.team_away === m.team_away) return finalMatch.team_away;
+    }
+    const thirdMatch = matchesList.find(match => match.id === 103);
+    if (thirdMatch) {
+      const isHomeInThird = thirdMatch.team_home === m.team_home || thirdMatch.team_away === m.team_home;
+      const isAwayInThird = thirdMatch.team_home === m.team_away || thirdMatch.team_away === m.team_away;
+      if (isHomeInThird && !isAwayInThird) return m.team_away;
+      if (isAwayInThird && !isHomeInThird) return m.team_home;
+    }
+  }
+  return null;
+}
+
+function resolveRealResults(matchesList) {
+  const resolved = {};
+  for (let id = 1; id <= 72; id++) {
+    const m = matchesList.find(match => match.id === id);
+    if (m) {
+      resolved[id] = {
+        id: id,
+        home: m.team_home,
+        away: m.team_away,
+        score_home: m.score_home,
+        score_away: m.score_away,
+        is_finished: m.is_finished,
+        winner: m.is_finished && m.score_home !== null && m.score_away !== null ? (m.score_home > m.score_away ? m.team_home : (m.score_home < m.score_away ? m.team_away : null)) : null
+      };
+    }
+  }
+  for (let id = 73; id <= 88; id++) {
+    const m = matchesList.find(match => match.id === id);
+    if (m) {
+      resolved[id] = {
+        id: id,
+        home: m.team_home,
+        away: m.team_away,
+        score_home: m.score_home,
+        score_away: m.score_away,
+        is_finished: m.is_finished,
+        winner: getRealWinnerTeam(m, matchesList)
+      };
+    }
+  }
+  const order = [
+    89, 90, 91, 92, 93, 94, 95, 96,
+    97, 98, 99, 100,
+    101, 102,
+    103, 104
+  ];
+  order.forEach(id => {
+    const m = matchesList.find(match => match.id === id);
+    if (m) {
+      let homeTeam = m.team_home;
+      let awayTeam = m.team_away;
+      const parents = matchParents[id];
+      if (parents) {
+        const p1 = resolved[parents[0]];
+        const p2 = resolved[parents[1]];
+        if (id === 103) {
+          if (p1 && p1.is_finished && p1.winner) {
+            homeTeam = p1.winner === p1.home ? p1.away : p1.home;
+          }
+          if (p2 && p2.is_finished && p2.winner) {
+            awayTeam = p2.winner === p2.home ? p2.away : p2.home;
+          }
+        } else {
+          if (p1 && p1.is_finished && p1.winner) homeTeam = p1.winner;
+          if (p2 && p2.is_finished && p2.winner) awayTeam = p2.winner;
+        }
+      }
+      resolved[id] = {
+        id: id,
+        home: homeTeam,
+        away: awayTeam,
+        score_home: m.score_home,
+        score_away: m.score_away,
+        is_finished: m.is_finished,
+        winner: getRealWinnerTeam({ ...m, team_home: homeTeam, team_away: awayTeam }, matchesList)
+      };
+    }
+  });
+  return resolved;
+}
+
+function resolvePredictions(userPreds, matchesList) {
+  const resolved = {};
+  for (let id = 1; id <= 72; id++) {
+    const m = matchesList.find(match => match.id === id);
+    if (m) {
+      const pred = userPreds.find(p => p.match_id === id);
+      resolved[id] = {
+        id: id,
+        home: m.team_home,
+        away: m.team_away,
+        score_home: pred ? pred.pred_home : null,
+        score_away: pred ? pred.pred_away : null,
+        winner: pred && pred.pred_home !== null && pred.pred_away !== null ? (pred.pred_home > pred.pred_away ? m.team_home : (pred.pred_home < pred.pred_away ? m.team_away : null)) : null
+      };
+    }
+  }
+  for (let id = 73; id <= 88; id++) {
+    const m = matchesList.find(match => match.id === id);
+    if (m) {
+      const pred = userPreds.find(p => p.match_id === id);
+      const homeTeam = m.team_home;
+      const awayTeam = m.team_away;
+      let winner = null;
+      let score_home = null;
+      let score_away = null;
+      if (pred && pred.pred_home !== null && pred.pred_away !== null) {
+        score_home = decodeScore(pred.pred_home);
+        score_away = decodeScore(pred.pred_away);
+        const side = getWinnerSide(pred.pred_home, pred.pred_away);
+        if (side === "home") winner = homeTeam;
+        else if (side === "away") winner = awayTeam;
+      }
+      resolved[id] = {
+        id: id,
+        home: homeTeam,
+        away: awayTeam,
+        score_home: score_home,
+        score_away: score_away,
+        winner: winner
+      };
+    }
+  }
+  const order = [
+    89, 90, 91, 92, 93, 94, 95, 96,
+    97, 98, 99, 100,
+    101, 102,
+    103, 104
+  ];
+  order.forEach(id => {
+    const parents = matchParents[id];
+    let homeTeam = `Ganador P${parents[0]}`;
+    let awayTeam = `Ganador P${parents[1]}`;
+    const p1 = resolved[parents[0]];
+    const p2 = resolved[parents[1]];
+    if (id === 103) {
+      if (p1 && p1.winner) {
+        homeTeam = p1.winner === p1.home ? p1.away : p1.home;
+      } else {
+        homeTeam = `Perdedor P${parents[0]}`;
+      }
+      if (p2 && p2.winner) {
+        awayTeam = p2.winner === p2.home ? p2.away : p2.home;
+      } else {
+        awayTeam = `Perdedor P${parents[1]}`;
+      }
+    } else {
+      if (p1 && p1.winner) homeTeam = p1.winner;
+      if (p2 && p2.winner) awayTeam = p2.winner;
+    }
+    const pred = userPreds.find(p => p.match_id === id);
+    let winner = null;
+    let score_home = null;
+    let score_away = null;
+    const isPlaceholder = (team) => {
+      return team.startsWith("Ganador P") || team.startsWith("Perdedor P") || team === "";
+    };
+    if (pred && pred.pred_home !== null && pred.pred_away !== null && !isPlaceholder(homeTeam) && !isPlaceholder(awayTeam)) {
+      score_home = decodeScore(pred.pred_home);
+      score_away = decodeScore(pred.pred_away);
+      const side = getWinnerSide(pred.pred_home, pred.pred_away);
+      if (side === "home") winner = homeTeam;
+      else if (side === "away") winner = awayTeam;
+    }
+    resolved[id] = {
+      id: id,
+      home: homeTeam,
+      away: awayTeam,
+      score_home: score_home,
+      score_away: score_away,
+      winner: winner
+    };
+  });
+  return resolved;
+}
+
+function getMatchPointsUnified(matchId, predResolved, realResolved) {
+  const p = predResolved[matchId];
+  const r = realResolved[matchId];
+  if (!p || !r || p.score_home === null || p.score_away === null || r.score_home === null || r.score_away === null) {
+    return 0;
+  }
+  if (matchId <= 72) {
+    if (p.score_home === r.score_home && p.score_away === r.score_away) return 5;
+    const pSide = p.score_home > p.score_away ? "H" : (p.score_home < p.score_away ? "A" : "D");
+    const rSide = r.score_home > r.score_away ? "H" : (r.score_home < r.score_away ? "A" : "D");
+    return pSide === rSide ? 3 : 0;
+  } else {
+    const isWinnerCorrect = (p.winner === r.winner && r.winner !== null);
+    if (!isWinnerCorrect) return 0;
+    
+    let basePoints = 3;
+    const isMatchupCorrect = (p.home === r.home && p.away === r.away) || (p.home === r.away && p.away === r.home);
+    if (isMatchupCorrect) {
+      let isScoreExact = false;
+      if (p.home === r.home) {
+        isScoreExact = (p.score_home === r.score_home && p.score_away === r.score_away);
+      } else {
+        isScoreExact = (p.score_home === r.score_away && p.score_away === r.score_home);
+      }
+      if (isScoreExact) {
+        let hasAncestorError = false;
+        const ancestors = getAncestors(matchId);
+        for (const aId of ancestors) {
+          const pAnc = predResolved[aId];
+          const rAnc = realResolved[aId];
+          if (!pAnc || !rAnc) { hasAncestorError = true; break; }
+          const isAncMatchupCorrect = (pAnc.home === rAnc.home && pAnc.away === rAnc.away) || (pAnc.home === rAnc.away && pAnc.away === rAnc.home);
+          if (!isAncMatchupCorrect) { hasAncestorError = true; break; }
+        }
+        if (!hasAncestorError) {
+          basePoints += 2;
+        }
+      }
+    }
+    let mult = 1;
+    if (matchId >= 73 && matchId <= 88) mult = 1;
+    else if (matchId >= 89 && matchId <= 96) mult = 2;
+    else if (matchId >= 97 && matchId <= 100) mult = 3;
+    else if (matchId === 101 || matchId === 102 || matchId === 103) mult = 4;
+    else if (matchId === 104) mult = 5;
+    return basePoints * mult;
+  }
+}
+
+function getParticipantStats(participantId, allPreds, matchesList) {
+  const userPreds = allPreds.filter(pr => pr.participant_id === participantId);
+  const realResolved = resolveRealResults(matchesList);
+  const predResolved = resolvePredictions(userPreds, matchesList);
+  let pts = 0;
+  let ex = 0;
+  let ac = 0;
+  matchesList.forEach(m => {
+    if (m.is_finished) {
+      const pPoints = getMatchPointsUnified(m.id, predResolved, realResolved);
+      pts += pPoints;
+      const p = predResolved[m.id];
+      const r = realResolved[m.id];
+      if (p && r && p.score_home !== null && p.score_away !== null) {
+        if (m.id <= 72) {
+          if (pPoints === 5) ex++;
+          else if (pPoints === 3) ac++;
+        } else {
+          const isWinnerCorrect = (p.winner === r.winner && r.winner !== null);
+          if (isWinnerCorrect) {
+            const isMatchupCorrect = (p.home === r.home && p.away === r.away) || (p.home === r.away && p.away === r.home);
+            let isScoreExact = false;
+            if (isMatchupCorrect) {
+              if (p.home === r.home) {
+                isScoreExact = (p.score_home === r.score_home && p.score_away === r.score_away);
+              } else {
+                isScoreExact = (p.score_home === r.score_away && p.score_away === r.score_home);
+              }
+            }
+            let hasAncestorError = false;
+            if (isScoreExact) {
+              const ancestors = getAncestors(m.id);
+              for (const aId of ancestors) {
+                const pAnc = predResolved[aId];
+                const rAnc = realResolved[aId];
+                if (!pAnc || !rAnc) { hasAncestorError = true; break; }
+                const isAncMatchupCorrect = (pAnc.home === rAnc.home && pAnc.away === rAnc.away) || (pAnc.home === rAnc.away && pAnc.away === rAnc.home);
+                if (!isAncMatchupCorrect) { hasAncestorError = true; break; }
+              }
+            }
+            if (isScoreExact && !hasAncestorError) {
+              ex++;
+            } else {
+              ac++;
+            }
+          }
+        }
+      }
+    }
+  });
+  return { pts, ex, ac, tp: userPreds.length };
+}
+
+function calcPtsForSinglePrediction(pr, matchObj, allMatches, allPreds) {
+  const userPreds = allPreds.filter(p => p.participant_id === pr.participant_id);
+  const realResolved = resolveRealResults(allMatches);
+  const predResolved = resolvePredictions(userPreds, allMatches);
+  return getMatchPointsUnified(matchObj.id, predResolved, realResolved);
 }
 
 const normalizeTeamName = (name) => {
@@ -256,23 +650,13 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [compareMode, setCompareMode] = useState(false);
+  const [bracketSource, setBracketSource] = useState("db");
+  const [bracketViewMode, setBracketViewMode] = useState("tree");
 
   const [adminSearch, setAdminSearch] = useState("");
   const [adminStatus, setAdminStatus] = useState("pending");
 
-  const [simSource, setSimSource] = useState(() => {
-    return localStorage.getItem("sim_source") || "demo";
-  });
-  const [simWinners, setSimWinners] = useState(() => {
-    try {
-      const saved = localStorage.getItem("sim_winners");
-      return saved ? JSON.parse(saved) : {};
-    } catch {
-      return {};
-    }
-  });
-
-  const getR32TeamsAndMatches = useCallback((source) => {
+  const getBracketR32TeamMap = (source) => {
     const standingsFn = source === "real" ? getGroupStandings : getGroupStandingsPred;
     const groups = ["A","B","C","D","E","F","G","H","I","J","K","L"];
     const teamMap = {};
@@ -300,17 +684,24 @@ export default function App() {
       });
     }
     return teamMap;
-  }, [matches, allPreds]);
+  };
 
-  const resolveBracket = useCallback((source, winners) => {
-    const r32TeamMap = getR32TeamsAndMatches(source);
-    const matchesList = {};
-    const getW = (mid) => winners[mid] || null;
-    const getL = (mid) => {
-      const m = matchesList[mid];
-      if (!m || !m.winner) return null;
-      return m.winner === m.home ? m.away : m.home;
-    };
+  const resolvePredictionsWithSource = (userPreds, matchesList, source) => {
+    const resolved = {};
+    for (let id = 1; id <= 72; id++) {
+      const m = matchesList.find(match => match.id === id);
+      if (m) {
+        const pred = userPreds.find(p => p.match_id === id);
+        resolved[id] = {
+          id: id,
+          home: m.team_home,
+          away: m.team_away,
+          score_home: pred ? pred.pred_home : null,
+          score_away: pred ? pred.pred_away : null,
+          winner: pred && pred.pred_home !== null && pred.pred_away !== null ? (pred.pred_home > pred.pred_away ? m.team_home : (pred.pred_home < pred.pred_away ? m.team_away : null)) : null
+        };
+      }
+    }
 
     const r32Defs = [
       { id: 73, h: "2A", a: "2B" },
@@ -331,135 +722,201 @@ export default function App() {
       { id: 88, h: "2D", a: "2G" }
     ];
 
-    r32Defs.forEach(d => {
-      matchesList[d.id] = {
-        id: d.id,
-        home: r32TeamMap[d.h]?.name || `2° ${d.h[1]}`,
-        away: r32TeamMap[d.a]?.name || `3° ${d.a.split("_")[1] || ""}`,
-        winner: getW(d.id)
-      };
-    });
+    let r32TeamMap = null;
+    if (source !== "db") {
+      r32TeamMap = getBracketR32TeamMap(source);
+    }
 
-    const r16Defs = [
-      { id: 89, h: 74, a: 77 },
-      { id: 90, h: 73, a: 75 },
-      { id: 91, h: 76, a: 78 },
-      { id: 92, h: 79, a: 80 },
-      { id: 93, h: 83, a: 84 },
-      { id: 94, h: 81, a: 82 },
-      { id: 95, h: 86, a: 88 },
-      { id: 96, h: 85, a: 87 }
-    ];
-
-    r16Defs.forEach(d => {
-      const hTeam = getW(d.h);
-      const aTeam = getW(d.a);
-      matchesList[d.id] = {
-        id: d.id,
-        home: hTeam || `Ganador P${d.h}`,
-        away: aTeam || `Ganador P${d.a}`,
-        winner: getW(d.id),
-        hasInputs: !!(hTeam && aTeam)
-      };
-    });
-
-    const qfDefs = [
-      { id: 97, h: 89, a: 90 },
-      { id: 98, h: 93, a: 94 },
-      { id: 99, h: 91, a: 92 },
-      { id: 100, h: 95, a: 96 }
-    ];
-
-    qfDefs.forEach(d => {
-      const hTeam = getW(d.h);
-      const aTeam = getW(d.a);
-      matchesList[d.id] = {
-        id: d.id,
-        home: hTeam || `Ganador P${d.h}`,
-        away: aTeam || `Ganador P${d.a}`,
-        winner: getW(d.id),
-        hasInputs: !!(hTeam && aTeam)
-      };
-    });
-
-    const sfDefs = [
-      { id: 101, h: 97, a: 98 },
-      { id: 102, h: 99, a: 100 }
-    ];
-
-    sfDefs.forEach(d => {
-      const hTeam = getW(d.h);
-      const aTeam = getW(d.a);
-      matchesList[d.id] = {
-        id: d.id,
-        home: hTeam || `Ganador P${d.h}`,
-        away: aTeam || `Ganador P${d.a}`,
-        winner: getW(d.id),
-        hasInputs: !!(hTeam && aTeam)
-      };
-    });
-
-    const h3 = getL(101);
-    const a3 = getL(102);
-    matchesList[103] = {
-      id: 103,
-      home: h3 || `Perdedor P101`,
-      away: a3 || `Perdedor P102`,
-      winner: getW(103),
-      hasInputs: !!(h3 && a3)
-    };
-
-    const hF = getW(101);
-    const aF = getW(102);
-    matchesList[104] = {
-      id: 104,
-      home: hF || `Ganador P101`,
-      away: aF || `Ganador P102`,
-      winner: getW(104),
-      hasInputs: !!(hF && aF)
-    };
-
-    return matchesList;
-  }, [getR32TeamsAndMatches]);
-
-  const handleSimWinnerClick = (matchId, teamName) => {
-    if (!teamName || teamName.startsWith("Ganador P") || teamName.startsWith("Perdedor P")) return;
-    setSimWinners(prev => {
-      const updated = { ...prev };
-      if (updated[matchId] === teamName) {
-        delete updated[matchId];
-      } else {
-        updated[matchId] = teamName;
-      }
+    for (let id = 73; id <= 88; id++) {
+      const m = matchesList.find(match => match.id === id);
+      const def = r32Defs.find(d => d.id === id);
       
-      let changed = true;
-      while (changed) {
-        changed = false;
-        const tempResolved = resolveBracket(simSource, updated);
-        for (const [mid, data] of Object.entries(tempResolved)) {
-          if (updated[mid] && updated[mid] !== data.home && updated[mid] !== data.away) {
-            delete updated[mid];
-            changed = true;
+      let homeTeam = "";
+      let awayTeam = "";
+      
+      if (source === "db" && m) {
+        homeTeam = m.team_home;
+        awayTeam = m.team_away;
+      } else if (r32TeamMap && def) {
+        homeTeam = r32TeamMap[def.h]?.name || `2° Grupo ${def.h[1]}`;
+        awayTeam = r32TeamMap[def.a]?.name || (def.a.startsWith("3rd_") ? `3° Reservado` : `2° Grupo ${def.a[1]}`);
+      } else if (m) {
+        homeTeam = m.team_home;
+        awayTeam = m.team_away;
+      }
+
+      const pred = userPreds.find(p => p.match_id === id);
+      let winner = null;
+      let score_home = null;
+      let score_away = null;
+      if (pred && pred.pred_home !== null && pred.pred_away !== null) {
+        score_home = decodeScore(pred.pred_home);
+        score_away = decodeScore(pred.pred_away);
+        const side = getWinnerSide(pred.pred_home, pred.pred_away);
+        if (side === "home") winner = homeTeam;
+        else if (side === "away") winner = awayTeam;
+      }
+
+      resolved[id] = {
+        id: id,
+        home: homeTeam,
+        away: awayTeam,
+        score_home: score_home,
+        score_away: score_away,
+        winner: winner
+      };
+    }
+
+    const order = [
+      89, 90, 91, 92, 93, 94, 95, 96,
+      97, 98, 99, 100,
+      101, 102,
+      103, 104
+    ];
+
+    order.forEach(id => {
+      const parents = matchParents[id];
+      let homeTeam = `Ganador P${parents[0]}`;
+      let awayTeam = `Ganador P${parents[1]}`;
+      const p1 = resolved[parents[0]];
+      const p2 = resolved[parents[1]];
+      if (id === 103) {
+        if (p1 && p1.winner) {
+          homeTeam = p1.winner === p1.home ? p1.away : p1.home;
+        } else {
+          homeTeam = `Perdedor P${parents[0]}`;
+        }
+        if (p2 && p2.winner) {
+          awayTeam = p2.winner === p2.home ? p2.away : p2.home;
+        } else {
+          awayTeam = `Perdedor P${parents[1]}`;
+        }
+      } else {
+        if (p1 && p1.winner) homeTeam = p1.winner;
+        if (p2 && p2.winner) awayTeam = p2.winner;
+      }
+      const pred = userPreds.find(p => p.match_id === id);
+      let winner = null;
+      let score_home = null;
+      let score_away = null;
+      const isPlaceholder = (team) => {
+        return team.startsWith("Ganador P") || team.startsWith("Perdedor P") || team === "";
+      };
+      if (pred && pred.pred_home !== null && pred.pred_away !== null && !isPlaceholder(homeTeam) && !isPlaceholder(awayTeam)) {
+        score_home = decodeScore(pred.pred_home);
+        score_away = decodeScore(pred.pred_away);
+        const side = getWinnerSide(pred.pred_home, pred.pred_away);
+        if (side === "home") winner = homeTeam;
+        else if (side === "away") winner = awayTeam;
+      }
+      resolved[id] = {
+        id: id,
+        home: homeTeam,
+        away: awayTeam,
+        score_home: score_home,
+        score_away: score_away,
+        winner: winner
+      };
+    });
+
+    return resolved;
+  };
+
+  const getBracketDraftsMerged = () => {
+    const merged = [...preds];
+    Object.entries(drafts).forEach(([midStr, d]) => {
+      const mid = parseInt(midStr);
+      if (mid >= 73 && mid <= 104) {
+        const idx = merged.findIndex(p => p.match_id === mid);
+        
+        let predHome = null;
+        let predAway = null;
+        
+        const h = d.home;
+        const a = d.away;
+        
+        if (h !== undefined && h !== "" && a !== undefined && a !== "") {
+          const hInt = parseInt(h);
+          const aInt = parseInt(a);
+          if (hInt === aInt) {
+            const winner = d.penaltyWinner || "home";
+            if (winner === "home") {
+              predHome = hInt + 100;
+              predAway = aInt;
+            } else {
+              predHome = hInt;
+              predAway = aInt + 100;
+            }
+          } else {
+            predHome = hInt;
+            predAway = aInt;
+          }
+        }
+        
+        if (predHome !== null && predAway !== null) {
+          const predObj = {
+            participant_id: user.id,
+            match_id: mid,
+            pred_home: predHome,
+            pred_away: predAway
+          };
+          if (idx >= 0) {
+            merged[idx] = predObj;
+          } else {
+            merged.push(predObj);
+          }
+        } else {
+          if (idx >= 0) {
+            merged.splice(idx, 1);
           }
         }
       }
-      localStorage.setItem("sim_winners", JSON.stringify(updated));
-      return updated;
     });
+    return merged;
   };
 
-  const handleSimSourceChange = (src) => {
-    setSimSource(src);
-    localStorage.setItem("sim_source", src);
-    setSimWinners({});
-    localStorage.setItem("sim_winners", JSON.stringify({}));
+  const saveBracketPredictions = async () => {
+    if (!user) return;
+    const merged = getBracketDraftsMerged();
+    const bracketMatchesToSave = merged.filter(p => p.match_id >= 73 && p.match_id <= 104);
+    
+    if (bracketMatchesToSave.length === 0) {
+      setErr("No hay predicciones en el bracket para guardar.");
+      return;
+    }
+    
+    setSending(true);
+    setErr("");
+    setOk("");
+    
+    try {
+      await supa(`predictions?participant_id=eq.${user.id}&match_id=gte.73`, {
+        method: "DELETE"
+      });
+      const payload = bracketMatchesToSave.map(p => ({
+        participant_id: user.id,
+        match_id: p.match_id,
+        pred_home: p.pred_home,
+        pred_away: p.pred_away
+      }));
+      await supa("predictions", {
+        method: "POST",
+        body: JSON.stringify(payload)
+      });
+      await load();
+      setOk("¡Bracket guardado con éxito! 🔒");
+      triggerConfetti();
+    } catch (e) {
+      setErr("Error al guardar bracket: " + e.message);
+    }
+    setSending(false);
   };
 
   const publishKnockoutMatches = async () => {
     const confirm = window.confirm("¿Estás seguro de que quieres publicar los partidos de eliminación directa en la base de datos? Esto permitirá a los usuarios ingresar sus predicciones.");
     if (!confirm) return;
     
-    const r32TeamMap = getR32TeamsAndMatches("real");
+    const r32TeamMap = getBracketR32TeamMap("real");
     
     const r32Defs = [
       { id: 73, h: "2A", a: "2B", date: "2026-06-28" },
@@ -620,8 +1077,9 @@ export default function App() {
       const freshPreds = await supa(`predictions?match_id=eq.${mid}`);
       const matchObj = matches.find(m => m.id === mid);
       const phase = matchObj?.phase || "group";
+      const updatedMatches = matches.map(m => m.id === mid ? { ...m, score_home: parseInt(sh), score_away: parseInt(sa), is_finished: true } : m);
       for(const pr of (freshPreds||[])){
-        const pts=calcPts(pr.pred_home,pr.pred_away,parseInt(sh),parseInt(sa), phase);
+        const pts = calcPtsForSinglePrediction(pr, { id: mid, score_home: parseInt(sh), score_away: parseInt(sa), is_finished: true }, updatedMatches, allPreds);
         await supa(`predictions?id=eq.${pr.id}`,{method:"PATCH",body:JSON.stringify({points_earned:pts})});
       }
       await load(); setOk("Resultado y puntos actualizados ✓");
@@ -672,22 +1130,8 @@ export default function App() {
   const quickMatches = getQuickMatches();
 
   const ranking = parts.map(p => {
-    const pp = allPreds.filter(pr => pr.participant_id === p.id);
-    let pts = 0;
-    let ex = 0;
-    let ac = 0;
-    pp.forEach(pr => {
-      const m = mergedMatches.find(match => match.id === pr.match_id);
-      if (!m) return;
-      if (m.is_finished) {
-        const pPoints = calcPts(pr.pred_home, pr.pred_away, m.score_home, m.score_away, m.phase);
-        pts += pPoints;
-        const isExact = pr.pred_home === m.score_home && pr.pred_away === m.score_away;
-        if (isExact) ex++;
-        else if (pPoints > 0) ac++;
-      }
-    });
-    return { ...p, pts, ex, ac, tp: pp.length };
+    const stats = getParticipantStats(p.id, allPreds, mergedMatches);
+    return { ...p, pts: stats.pts, ex: stats.ex, ac: stats.ac, tp: stats.tp };
   }).sort((a, b) => b.pts - a.pts || b.ex - a.ex || a.name.localeCompare(b.name));
 
   const GS=["ALL","A","B","C","D","E","F","G","H","I","J","K","L"];
@@ -1078,15 +1522,23 @@ export default function App() {
 
                 <GF gs={GS} sel={grp} set={setGrp}/>
                 <div className="fixtures-list">
-                  {filteredMatches.map(match=>{
+                  {filteredMatches.filter(m => m.id <= 72).map(match=>{
                     const pred=getPred(match.id), locked=!!pred, draft=drafts[match.id]||{}, finished=match.is_finished, isLive=match.is_live;
                     let pts=null; 
                     let isExact = false;
                     let isWinner = false;
                     if ((finished || isLive) && pred) {
-                      pts = calcPts(pred.pred_home, pred.pred_away, match.score_home, match.score_away, match.phase);
-                      isExact = pred.pred_home === match.score_home && pred.pred_away === match.score_away;
-                      isWinner = !isExact && pts > 0;
+                      if (pred.pred_home !== null && pred.pred_away !== null && match.score_home !== null && match.score_away !== null) {
+                        if (pred.pred_home === match.score_home && pred.pred_away === match.score_away) {
+                          pts = 5;
+                          isExact = true;
+                        } else {
+                          const pSide = pred.pred_home > pred.pred_away ? "H" : (pred.pred_home < pred.pred_away ? "A" : "D");
+                          const rSide = match.score_home > match.score_away ? "H" : (match.score_home < match.score_away ? "A" : "D");
+                          pts = pSide === rSide ? 3 : 0;
+                          isWinner = pSide === rSide;
+                        }
+                      }
                     }
                     
                     let matchCardClass = "match-card";
@@ -1345,18 +1797,15 @@ export default function App() {
             </div>
             {selectedPart ? (()=>{
               const partPreds = allPreds.filter(pr=>pr.participant_id===selectedPart.id);
-              let totalPts = 0;
-              let exactos = 0;
-              let aciertos = 0;
-              partPreds.forEach(pr => {
-                const m = mergedMatches.find(match => match.id === pr.match_id);
-                if (m && (m.is_finished || m.is_live)) {
-                  const pts = calcPts(pr.pred_home, pr.pred_away, m.score_home, m.score_away);
-                  totalPts += pts;
-                  if (pts === 5) exactos++;
-                  else if (pts === 3) aciertos++;
-                }
-              });
+              const stats = getParticipantStats(selectedPart.id, allPreds, mergedMatches);
+              let totalPts = stats.pts;
+              let exactos = stats.ex;
+              let aciertos = stats.ac;
+              
+              const selectedPartResolved = resolvePredictions(partPreds, mergedMatches);
+              const realResolved = resolveRealResults(mergedMatches);
+              const myPredsResolved = resolvePredictions(preds, mergedMatches);
+              
               return(
                 <div className="participant-dashboard fade-in">
                   <div className="glass-card summary-dashboard">
@@ -1399,43 +1848,29 @@ export default function App() {
                   <GF gs={GS} sel={grp} set={setGrp}/>
                   <div className="fixtures-list">
                     {filteredMatches.map(match=>{
-                      const pred = partPreds.find(pr=>pr.match_id===match.id);
+                      const pResS = selectedPartResolved[match.id];
+                      const pResM = myPredsResolved[match.id];
+                      const rRes = realResolved[match.id];
                       
                       // COMPARISON MODE RENDERING
                       if (compareMode) {
-                        const predMine = preds.find(pr=>pr.match_id===match.id);
-                        const draftMine = drafts[match.id];
-                        
-                        const scoreS = pred ? `${pred.pred_home} - ${pred.pred_away}` : "- : -";
-                        let scoreM = "- : -";
-                        let hasMyPred = false;
-                        let myHome = null;
-                        let myAway = null;
-                        
-                        if (predMine) {
-                          scoreM = `${predMine.pred_home} - ${predMine.pred_away}`;
-                          hasMyPred = true;
-                          myHome = predMine.pred_home;
-                          myAway = predMine.pred_away;
-                        } else if (draftMine && draftMine.home !== undefined && draftMine.home !== "" && draftMine.away !== undefined && draftMine.away !== "") {
-                          scoreM = `${draftMine.home} - ${draftMine.away} (Draft)`;
-                          hasMyPred = true;
-                          myHome = parseInt(draftMine.home);
-                          myAway = parseInt(draftMine.away);
-                        }
+                        const scoreS = pResS && pResS.score_home !== null && pResS.score_away !== null ? `${pResS.score_home} - ${pResS.score_away}${pResS.winner && pResS.score_home === pResS.score_away ? ` (${pResS.winner === pResS.home ? "L" : "V"})` : ""}` : "- : -";
+                        const scoreM = pResM && pResM.score_home !== null && pResM.score_away !== null ? `${pResM.score_home} - ${pResM.score_away}${pResM.winner && pResM.score_home === pResM.score_away ? ` (${pResM.winner === pResM.home ? "L" : "V"})` : ""}` : "- : -";
+                        const hasMyPred = pResM && pResM.score_home !== null;
+                        const hasPartPred = pResS && pResS.score_home !== null;
                         
                         let compClass = "match-card-conflict";
                         let compBadgeText = "Diferente";
                         let compBadgeClass = "badge-danger";
                         
-                        if (!pred || !hasMyPred) {
+                        if (!hasPartPred || !hasMyPred) {
                           compClass = "";
                           compBadgeText = "Sin predicción";
                           compBadgeClass = "badge-neutral";
                         } else {
-                          const sameScore = pred.pred_home === myHome && pred.pred_away === myAway;
-                          const outcomeS = pred.pred_home > pred.pred_away ? "H" : pred.pred_home < pred.pred_away ? "A" : "D";
-                          const outcomeM = myHome > myAway ? "H" : myHome < myAway ? "A" : "D";
+                          const sameScore = pResS.score_home === pResM.score_home && pResS.score_away === pResM.score_away;
+                          const outcomeS = pResS.score_home > pResS.score_away ? "H" : (pResS.score_home < pResS.score_away ? "A" : (pResS.winner === pResS.home ? "H" : "A"));
+                          const outcomeM = pResM.score_home > pResM.score_away ? "H" : (pResM.score_home < pResM.score_away ? "A" : (pResM.winner === pResM.home ? "H" : "A"));
                           const sameOutcome = outcomeS === outcomeM;
                           
                           if (sameScore) {
@@ -1463,13 +1898,13 @@ export default function App() {
                             </div>
                             <div className="comparison-fixture-row">
                               <div className="comparison-team-side">
-                                <span className="team-name">{match.team_home}</span>
-                                <span className="flag-emoji large">{gf(match.team_home)}</span>
+                                <span className="team-name">{match.id <= 72 ? match.team_home : (pResS?.home || pResM?.home || match.team_home)}</span>
+                                <span className="flag-emoji large">{gf(match.id <= 72 ? match.team_home : (pResS?.home || pResM?.home || match.team_home))}</span>
                               </div>
                               <div className="comparison-vs-badge">VS</div>
                               <div className="comparison-team-side text-left">
-                                <span className="flag-emoji large">{gf(match.team_away)}</span>
-                                <span className="team-name">{match.team_away}</span>
+                                <span className="flag-emoji large">{gf(match.id <= 72 ? match.team_away : (pResS?.away || pResM?.away || match.team_away))}</span>
+                                <span className="team-name">{match.id <= 72 ? match.team_away : (pResS?.away || pResM?.away || match.team_away)}</span>
                               </div>
                             </div>
                             <div className="comparison-predictions-grid">
@@ -1479,7 +1914,7 @@ export default function App() {
                               </div>
                               <div className="comparison-user-prediction my-prediction-column">
                                 <div className="comparison-user-name">Tú</div>
-                                <div className="comparison-score text-bebas" style={{ color: predMine ? "var(--green)" : "var(--accent)" }}>{scoreM}</div>
+                                <div className="comparison-score text-bebas" style={{ color: hasMyPred ? "var(--green)" : "var(--accent)" }}>{scoreM}</div>
                               </div>
                             </div>
                           </div>
@@ -1487,7 +1922,8 @@ export default function App() {
                       }
 
                       // STANDARD VIEW RENDERING
-                      if(!pred) return(
+                      const hasPartPred = pResS && pResS.score_home !== null;
+                      if(!hasPartPred) return(
                         <div key={match.id} className={`match-card ${match.is_live ? "match-card-live" : "match-card-finished opacity-60"}`}>
                           <div className="match-card-header">
                             <span className="match-meta">
@@ -1515,15 +1951,53 @@ export default function App() {
                           </div>
                         </div>
                       );
+                      
                       const finished = match.is_finished;
                       const isLive = match.is_live;
                       let pts = null;
                       let isExact = false;
                       let isWinner = false;
-                      if ((finished || isLive) && pred) {
-                        pts = calcPts(pred.pred_home, pred.pred_away, match.score_home, match.score_away, match.phase);
-                        isExact = pred.pred_home === match.score_home && pred.pred_away === match.score_away;
-                        isWinner = !isExact && pts > 0;
+                      let wasDemoted = false;
+                      
+                      if ((finished || isLive) && pResS && pResS.score_home !== null && pResS.score_away !== null && rRes && rRes.score_home !== null && rRes.score_away !== null) {
+                        pts = getMatchPointsUnified(match.id, selectedPartResolved, realResolved);
+                        
+                        if (match.id <= 72) {
+                          isExact = pts === 5;
+                          isWinner = pts === 3;
+                        } else {
+                          const isWinnerCorrect = (pResS.winner === rRes.winner && rRes.winner !== null);
+                          if (isWinnerCorrect) {
+                            const isMatchupCorrect = (pResS.home === rRes.home && pResS.away === rRes.away) || (pResS.home === rRes.away && pResS.away === rRes.home);
+                            if (isMatchupCorrect) {
+                              if (pResS.home === rRes.home) {
+                                isExact = (pResS.score_home === rRes.score_home && pResS.score_away === rRes.score_away);
+                              } else {
+                                isExact = (pResS.score_home === rRes.score_away && pResS.score_away === rRes.score_home);
+                              }
+                            }
+                            
+                            let hasAncestorError = false;
+                            if (isExact) {
+                              const ancestors = getAncestors(match.id);
+                              for (const aId of ancestors) {
+                                const pAnc = selectedPartResolved[aId];
+                                const rAnc = realResolved[aId];
+                                if (!pAnc || !rAnc) { hasAncestorError = true; break; }
+                                const isAncMatchupCorrect = (pAnc.home === rAnc.home && pAnc.away === rAnc.away) || (pAnc.home === rAnc.away && pAnc.away === rAnc.home);
+                                if (!isAncMatchupCorrect) { hasAncestorError = true; break; }
+                              }
+                            }
+                            
+                            if (isExact && hasAncestorError) {
+                              isExact = false;
+                              isWinner = true;
+                              wasDemoted = true;
+                            } else {
+                              isWinner = !isExact;
+                            }
+                          }
+                        }
                       }
                       
                       let matchCardClass = "match-card";
@@ -1538,7 +2012,7 @@ export default function App() {
                       }
 
                       let liveGlowClass = "";
-                      if (isLive && pred) {
+                      if (isLive && pResS) {
                         if (isExact) liveGlowClass = "live-glow-exact";
                         else if (isWinner) liveGlowClass = "live-glow-winner";
                       }
@@ -1547,32 +2021,39 @@ export default function App() {
                         <div key={match.id} className={matchCardClass}>
                           <div className="match-card-header">
                             <span className="match-meta">
-                              Grupo {match.group_name} · #{match.match_number} · {match.match_date}
+                              {match.id <= 72 ? `Grupo ${match.group_name}` : "Eliminación Directa"} · #{match.match_number} · {match.match_date}
                               {isLive && <span className="live-minute-badge"> {match.time_elapsed}'</span>}
                             </span>
                             {isLive && <span className="badge badge-live">● EN VIVO</span>}
-                            {finished&&pts!==null&&<span className={`badge ${isExact?'badge-success':isWinner?'badge-info':'badge-danger'} badge-pts-earned`}>{isExact?`🎯 +${pts}`:isWinner?`✓ +${pts}`:"✗ 0"}</span>}
+                            {finished&&pts!==null&&<span className={`badge ${isExact?'badge-success':isWinner?'badge-info':'badge-danger'} badge-pts-earned`}>
+                              {isExact ? `🎯 +${pts}` : isWinner ? (wasDemoted ? `✓ +${pts} (⚠️ Rival diferente)` : `✓ +${pts}`) : "✗ 0"}
+                            </span>}
                             {isLive&&pts!==null&&pts>0&&<span className={`badge ${isExact?'badge-success-glow':'badge-info-glow'} badge-pts-earned`}>{isExact?`🎯 +${pts} (Parcial)`:`✓ +${pts} (Parcial)`}</span>}
                             {!finished&&!isLive&&<span className="badge badge-success">🔒 Enviado</span>}
                           </div>
                           <div className="match-fixture-row">
                             <div className="team-home">
-                              <span className="team-name">{match.team_home}</span>
-                              <span className="flag-emoji large">{gf(match.team_home)}</span>
+                              <span className="team-name">{match.id <= 72 ? match.team_home : pResS.home}</span>
+                              <span className="flag-emoji large">{gf(match.id <= 72 ? match.team_home : pResS.home)}</span>
                             </div>
                             <div className="score-inputs-container">
                               <div className={`locked-prediction text-bebas ${liveGlowClass}`}>
-                                <span className="predicted-score">{pred.pred_home}</span>
+                                <span className="predicted-score">{pResS.score_home}</span>
                                 <span className="score-separator">:</span>
-                                <span className="predicted-score">{pred.pred_away}</span>
+                                <span className="predicted-score">{pResS.score_away}</span>
                               </div>
+                              {match.id >= 73 && pResS && pResS.score_home !== null && pResS.score_home === pResS.score_away && (
+                                <div className="penalty-winner-text" style={{ fontSize: "10px", color: "var(--accent)", marginTop: "4px", textAlign: "center" }}>
+                                  Pasa: {pResS.winner}
+                                </div>
+                              )}
                             </div>
                             <div className="team-away">
-                              <span className="flag-emoji large">{gf(match.team_away)}</span>
-                              <span className="team-name">{match.team_away}</span>
+                              <span className="flag-emoji large">{gf(match.id <= 72 ? match.team_away : pResS.away)}</span>
+                              <span className="team-name">{match.id <= 72 ? match.team_away : pResS.away}</span>
                             </div>
                           </div>
-                          {(finished || isLive) && <div className="real-score-row">Resultado {isLive ? "parcial" : "real"}: <span className="real-score-accent text-bebas" style={{color: isLive ? "var(--green)" : "var(--accent)"}}>{match.score_home} - {match.score_away}</span></div>}
+                          {(finished || isLive) && <div className="real-score-row">Resultado {isLive ? "parcial" : "real"}: <span className="real-score-accent text-bebas" style={{color: isLive ? "var(--green)" : "var(--accent)"}}>{rRes ? rRes.score_home : match.score_home} - {rRes ? rRes.score_away : match.score_away}</span></div>}
                         </div>
                       );
                     })}
@@ -1598,154 +2079,310 @@ export default function App() {
                 <button onClick={publishKnockoutMatches} disabled={sending} className="btn-success">
                   {sending ? "Publicando..." : "Publicar Bracket Oficial 🔒"}
                 </button>
-                <button onClick={() => { if(window.confirm("¿Restablecer la simulación?")) { setSimWinners({}); localStorage.setItem("sim_winners", "{}"); } }} className="btn-secondary">
-                  Restablecer 🗑️
+                <button onClick={() => { if(window.confirm("¿Restablecer la simulación?")) { setDrafts({}); } }} className="btn-secondary">
+                  Restablecer Borrador 🗑️
                 </button>
               </div>
             </div>
-            <p className="section-subtitle">Simulación interactiva de las rondas de eliminación. Hacé clic en un equipo para avanzarlo.</p>
+            
+            <div className="glass-card rules-alert-card" style={{ marginBottom: "20px", padding: "16px 20px" }}>
+              <h4 style={{ margin: "0 0 8px 0", color: "var(--accent)", display: "flex", alignItems: "center", gap: "8px" }}>
+                <span>💡</span> REGLAS DE PUNTUACIÓN Y CONTINUIDAD
+              </h4>
+              <ul style={{ margin: 0, paddingLeft: "20px", fontSize: "13px", lineHeight: "1.6", color: "var(--text-dim)" }}>
+                <li><strong>Acertar Ganador:</strong> +3 pts base. <strong>Marcador Exacto:</strong> +2 pts base.</li>
+                <li><strong>Multiplicadores:</strong> Dieciseisavos (x1), Octavos (x2), Cuartos (x3), Semis y 3er puesto (x4), Final (x5).</li>
+                <li><strong>Regla de Continuidad:</strong> Si fallás el rival de un equipo en la ronda anterior (ej. pusiste España pero pasó Inglaterra en la realidad), ya no podés sumar los +2 pts por <em>Marcador Exacto</em> en ese equipo, solo sumarás por <em>Ganador</em> si el equipo avanza en la realidad.</li>
+                <li><strong>Empates (Penales):</strong> Se permite ingresar empates en el marcador. Si lo hacés, aparecerán botones para seleccionar cuál equipo avanza.</li>
+              </ul>
+            </div>
 
-            <div className="sim-source-selector" style={{ marginBottom: "24px", display: "flex", gap: "10px", flexWrap: "wrap" }}>
-              <span style={{ display: "flex", alignItems: "center", fontWeight: "bold", fontSize: "14px", color: "var(--text-dim)", marginRight: "10px" }}>Origen de los equipos R32:</span>
-              <button onClick={() => handleSimSourceChange("demo")} className={`btn-tab-pill ${simSource==="demo"?'active':''}`}>Modo Demo (Ficticios)</button>
-              <button onClick={() => handleSimSourceChange("real")} className={`btn-tab-pill ${simSource==="real"?'active':''}`}>Standings Reales</button>
-              <button onClick={() => handleSimSourceChange("pred")} className={`btn-tab-pill ${simSource==="pred"?'active':''}`}>Standings Mis Pred.</button>
+            <div className="sim-source-selector" style={{ marginBottom: "20px", display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
+              <span style={{ fontWeight: "bold", fontSize: "13.5px", color: "var(--text-dim)" }}>Fuente de Cruces R32:</span>
+              <button onClick={() => setBracketSource("db")} className={`btn-tab-pill ${bracketSource==="db"?'active':''}`}>Oficiales Publicados</button>
+              <button onClick={() => setBracketSource("pred")} className={`btn-tab-pill ${bracketSource==="pred"?'active':''}`}>Standings Mis Pred.</button>
+              <button onClick={() => setBracketSource("real")} className={`btn-tab-pill ${bracketSource==="real"?'active':''}`}>Standings Reales</button>
+              <button onClick={() => setBracketSource("demo")} className={`btn-tab-pill ${bracketSource==="demo"?'active':''}`}>Modo Demo (Ficticios)</button>
+            </div>
+
+            <div className="view-mode-selector" style={{ marginBottom: "20px", display: "flex", gap: "10px" }}>
+              <button onClick={() => setBracketViewMode("tree")} className={`btn-tab-pill ${bracketViewMode==="tree"?'active':''}`}>🌳 Vista de Árbol (Visual)</button>
+              <button onClick={() => setBracketViewMode("list")} className={`btn-tab-pill ${bracketViewMode==="list"?'active':''}`}>📝 Vista de Lista (Llenar Rápido)</button>
             </div>
 
             {(() => {
-              const res = resolveBracket(simSource, simWinners);
-              
-              // Define standard order for symmetrical layout
-              const leftR32 = [73, 75, 74, 77, 83, 84, 81, 82];
-              const leftR16 = [90, 89, 93, 94];
-              const leftQF  = [97, 98];
-              const leftSF  = [101];
+              const hasMatches = matches.some(m => m.id === 73);
+              if (bracketSource === "db" && !hasMatches) {
+                return (
+                  <div className="glass-card text-center" style={{ padding: "40px 20px" }}>
+                    <div style={{ fontSize: 44, marginBottom: 12 }}>⏳</div>
+                    <div style={{ color: "var(--text-dim)", fontWeight: 700, marginBottom: "12px" }}>Los cruces oficiales aún no están publicados.</div>
+                    <div style={{ fontSize: "13px", color: "var(--text-muted)" }}>
+                      Podés simular interactivamente seleccionando las fuentes <strong>"Standings Mis Pred."</strong> o <strong>"Modo Demo"</strong> arriba.
+                    </div>
+                  </div>
+                );
+              }
 
-              const rightR32 = [76, 78, 79, 80, 86, 88, 85, 87];
-              const rightR16 = [91, 92, 95, 96];
-              const rightQF  = [99, 100];
-              const rightSF  = [102];
+              const merged = getBracketDraftsMerged();
+              const userBracket = resolvePredictionsWithSource(merged, mergedMatches, bracketSource);
+              const realResolved = resolveRealResults(mergedMatches);
 
-              const renderMatch = (matchId) => {
-                const m = res[matchId];
+              const handleScoreChange = (mid, side, value) => {
+                setDrafts(prev => {
+                  const updated = { ...prev };
+                  if (!updated[mid]) updated[mid] = {};
+                  updated[mid][side] = value;
+                  
+                  const h = updated[mid].home;
+                  const a = updated[mid].away;
+                  if (h !== undefined && a !== undefined && h !== "" && a !== "") {
+                    if (parseInt(h) !== parseInt(a)) {
+                      delete updated[mid].penaltyWinner;
+                    }
+                  }
+                  return updated;
+                });
+              };
+
+              const handleSelectPenaltyWinner = (mid, winnerSide) => {
+                setDrafts(prev => {
+                  const updated = { ...prev };
+                  if (!updated[mid]) updated[mid] = {};
+                  updated[mid].penaltyWinner = winnerSide;
+                  return updated;
+                });
+              };
+
+              const renderMatchCardCompact = (matchId) => {
+                const m = userBracket[matchId];
                 if (!m) return null;
-                const isHomeW = m.winner === m.home && m.winner !== null;
-                const isAwayW = m.winner === m.away && m.winner !== null;
+                const r = realResolved[matchId];
                 
-                const isHomePlaceholder = !m.home || m.home.startsWith("Ganador P") || m.home.startsWith("Perdedor P");
-                const isAwayPlaceholder = !m.away || m.away.startsWith("Ganador P") || m.away.startsWith("Perdedor P");
+                const isHomePlaceholder = !m.home || m.home.startsWith("Ganador P") || m.home.startsWith("Perdedor P") || m.home === "";
+                const isAwayPlaceholder = !m.away || m.away.startsWith("Ganador P") || m.away.startsWith("Perdedor P") || m.away === "";
+                const isDisabled = isHomePlaceholder || isAwayPlaceholder;
+                
+                const draft = drafts[m.id] || {};
+                const dbPred = preds.find(p => p.match_id === m.id);
+                let initialHome = "";
+                let initialAway = "";
+                let initialPenaltyWinner = null;
+                
+                if (dbPred) {
+                  const decoded = decodePrediction(dbPred.pred_home, dbPred.pred_away);
+                  if (decoded) {
+                    initialHome = String(decoded.homeScore);
+                    initialAway = String(decoded.awayScore);
+                    initialPenaltyWinner = decoded.winnerIsHome ? "home" : "away";
+                  }
+                }
+                
+                const hScoreVal = draft.home !== undefined ? draft.home : initialHome;
+                const aScoreVal = draft.away !== undefined ? draft.away : initialAway;
+                const penaltyWinner = draft.penaltyWinner !== undefined ? draft.penaltyWinner : (hScoreVal === aScoreVal && hScoreVal !== "" ? initialPenaltyWinner : null);
+                
+                const isTie = hScoreVal !== "" && aScoreVal !== "" && parseInt(hScoreVal) === parseInt(aScoreVal);
+                
+                const isHomeWinner = m.winner === m.home && m.winner !== null;
+                const isAwayWinner = m.winner === m.away && m.winner !== null;
+                
+                let hasAncestorError = false;
+                if (r && r.is_finished) {
+                  const ancestors = getAncestors(m.id);
+                  for (const aId of ancestors) {
+                    const pAnc = userBracket[aId];
+                    const rAnc = realResolved[aId];
+                    if (!pAnc || !rAnc) { hasAncestorError = true; break; }
+                    const isAncMatchupCorrect = (pAnc.home === rAnc.home && pAnc.away === rAnc.away) || (pAnc.home === rAnc.away && pAnc.away === rAnc.home);
+                    if (!isAncMatchupCorrect) { hasAncestorError = true; break; }
+                  }
+                }
                 
                 return (
-                  <div key={m.id} className={`bracket-match-card ${m.winner ? "has-winner" : ""}`}>
-                    <div className="bracket-match-num">Match #{m.id}</div>
+                  <div key={m.id} className={`bracket-match-card ${m.winner ? "has-winner" : ""} ${isDisabled ? "is-disabled" : ""}`} style={{ height: isTie ? "128px" : "96px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", height: "14px" }}>
+                      <span className="bracket-match-num">Match #{m.id}</span>
+                      {hasAncestorError && <span className="badge badge-warning" style={{ fontSize: "8.5px", padding: "1px 4px" }} title="Rival diferente en ronda previa. No sumará exacto.">⚠️ Rival diff</span>}
+                    </div>
+                    
                     <div className="bracket-match-teams">
-                      <div 
-                        onClick={() => !isHomePlaceholder && handleSimWinnerClick(m.id, m.home)}
-                        className={`bracket-team-row ${isHomeW ? "is-winner" : ""} ${isHomePlaceholder ? "is-placeholder" : ""}`}
-                      >
-                        <span className="flag-emoji">{!isHomePlaceholder ? gf(m.home) : "🏳️"}</span>
-                        <span className="team-name" title={m.home}>{m.home}</span>
-                        {isHomeW && <span className="winner-indicator">✓</span>}
+                      <div className={`bracket-team-row ${isHomeWinner ? "is-winner" : ""} ${isHomePlaceholder ? "is-placeholder" : ""}`}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, minWidth: 0 }}>
+                          <span className="flag-emoji">{!isHomePlaceholder ? gf(m.home) : "🏳️"}</span>
+                          <span className="team-name" title={m.home}>{m.home}</span>
+                        </div>
+                        <input 
+                          type="number" 
+                          min="0"
+                          max="20"
+                          value={hScoreVal}
+                          disabled={isDisabled}
+                          onChange={e => handleScoreChange(m.id, "home", e.target.value)}
+                          className="bracket-score-input-inline"
+                          placeholder="-"
+                        />
                       </div>
-                      <div 
-                        onClick={() => !isAwayPlaceholder && handleSimWinnerClick(m.id, m.away)}
-                        className={`bracket-team-row ${isAwayW ? "is-winner" : ""} ${isAwayPlaceholder ? "is-placeholder" : ""}`}
-                      >
-                        <span className="flag-emoji">{!isAwayPlaceholder ? gf(m.away) : "🏳️"}</span>
-                        <span className="team-name" title={m.away}>{m.away}</span>
-                        {isAwayW && <span className="winner-indicator">✓</span>}
+                      
+                      <div className={`bracket-team-row ${isAwayWinner ? "is-winner" : ""} ${isAwayPlaceholder ? "is-placeholder" : ""}`}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, minWidth: 0 }}>
+                          <span className="flag-emoji">{!isAwayPlaceholder ? gf(m.away) : "🏳️"}</span>
+                          <span className="team-name" title={m.away}>{m.away}</span>
+                        </div>
+                        <input 
+                          type="number" 
+                          min="0"
+                          max="20"
+                          value={aScoreVal}
+                          disabled={isDisabled}
+                          onChange={e => handleScoreChange(m.id, "away", e.target.value)}
+                          className="bracket-score-input-inline"
+                          placeholder="-"
+                        />
                       </div>
                     </div>
+                    
+                    {isTie && !isDisabled && (
+                      <div className="penalty-tiebreaker-inline">
+                        <span style={{ fontSize: 9, color: "var(--text-dim)" }}>Penales:</span>
+                        <div style={{ display: "flex", gap: 4 }}>
+                          <button onClick={() => handleSelectPenaltyWinner(m.id, "home")} className={`penalty-btn-mini ${penaltyWinner === "home" ? "active" : ""}`}>L</button>
+                          <button onClick={() => handleSelectPenaltyWinner(m.id, "away")} className={`penalty-btn-mini ${penaltyWinner === "away" ? "active" : ""}`}>V</button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               };
 
-              return (
-                <div className="bracket-viewport">
-                  <div className="bracket-container">
-                    
-                    {/* LEFT R32 */}
-                    <div className="bracket-col col-r32">
-                      <div className="bracket-col-title">R32 (Izq)</div>
-                      <div className="bracket-col-matches">
-                        {leftR32.map(id => renderMatch(id))}
-                      </div>
-                    </div>
-
-                    {/* LEFT R16 */}
-                    <div className="bracket-col col-r16">
-                      <div className="bracket-col-title">Octavos (Izq)</div>
-                      <div className="bracket-col-matches">
-                        {leftR16.map(id => renderMatch(id))}
-                      </div>
-                    </div>
-
-                    {/* LEFT QF */}
-                    <div className="bracket-col col-qf">
-                      <div className="bracket-col-title">Cuartos (Izq)</div>
-                      <div className="bracket-col-matches">
-                        {leftQF.map(id => renderMatch(id))}
-                      </div>
-                    </div>
-
-                    {/* LEFT SF */}
-                    <div className="bracket-col col-sf">
-                      <div className="bracket-col-title">Semis (Izq)</div>
-                      <div className="bracket-col-matches">
-                        {leftSF.map(id => renderMatch(id))}
-                      </div>
-                    </div>
-
-                    {/* FINALS CENTER */}
-                    <div className="bracket-col col-finals">
-                      <div className="bracket-col-title">Finales</div>
-                      <div className="bracket-col-matches finals-grid">
-                        <div className="finals-group main-final-grid">
-                          <div className="finals-title gold-text">🏆 FINAL</div>
-                          {renderMatch(104)}
-                        </div>
-                        <div className="finals-group third-place-grid">
-                          <div className="finals-title text-dim">🥉 TERCER PUESTO</div>
-                          {renderMatch(103)}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* RIGHT SF */}
-                    <div className="bracket-col col-sf">
-                      <div className="bracket-col-title">Semis (Der)</div>
-                      <div className="bracket-col-matches">
-                        {rightSF.map(id => renderMatch(id))}
-                      </div>
-                    </div>
-
-                    {/* RIGHT QF */}
-                    <div className="bracket-col col-qf">
-                      <div className="bracket-col-title">Cuartos (Der)</div>
-                      <div className="bracket-col-matches">
-                        {rightQF.map(id => renderMatch(id))}
-                      </div>
-                    </div>
-
-                    {/* RIGHT R16 */}
-                    <div className="bracket-col col-r16">
-                      <div className="bracket-col-title">Octavos (Der)</div>
-                      <div className="bracket-col-matches">
-                        {rightR16.map(id => renderMatch(id))}
-                      </div>
-                    </div>
-
-                    {/* RIGHT R32 */}
-                    <div className="bracket-col col-r32">
-                      <div className="bracket-col-title">R32 (Der)</div>
-                      <div className="bracket-col-matches">
-                        {rightR32.map(id => renderMatch(id))}
-                      </div>
-                    </div>
-
-                  </div>
+              const saveButton = bracketSource === "db" ? (
+                <div style={{ display: "flex", justifyContent: "center", margin: "24px 0" }}>
+                  <button onClick={saveBracketPredictions} disabled={sending} className="btn-primary" style={{ padding: "12px 32px", fontSize: "16px", borderRadius: "14px", fontWeight: "bold", width: "100%", maxWidth: "400px" }}>
+                    {sending ? "Guardando..." : "🔒 Guardar Todo el Bracket"}
+                  </button>
+                </div>
+              ) : (
+                <div className="glass-card text-center" style={{ margin: "20px 0", border: "1px dashed var(--border)", padding: "14px" }}>
+                  <span style={{ fontSize: 13, color: "var(--text-dim)" }}>
+                    ⚠️ Estás en modo simulación (<strong>{bracketSource === "pred" ? "Standings de Mis Pred." : "Modo Demo"}</strong>). No se pueden guardar predicciones en este modo. Selecciona <strong>"Oficiales Publicados"</strong> para guardar.
+                  </span>
                 </div>
               );
+
+              if (bracketViewMode === "tree") {
+                const leftR32 = [73, 75, 74, 77, 83, 84, 81, 82];
+                const leftR16 = [90, 89, 93, 94];
+                const leftQF  = [97, 98];
+                const leftSF  = [101];
+
+                const rightR32 = [76, 78, 79, 80, 86, 88, 85, 87];
+                const rightR16 = [91, 92, 95, 96];
+                const rightQF  = [99, 100];
+                const rightSF  = [102];
+
+                return (
+                  <div className="tree-mode-wrapper">
+                    <div className="bracket-viewport">
+                      <div className="bracket-container">
+                        <div className="bracket-col col-r32">
+                          <div className="bracket-col-title">R32 (Izq)</div>
+                          <div className="bracket-col-matches">
+                            {leftR32.map(id => renderMatchCardCompact(id))}
+                          </div>
+                        </div>
+
+                        <div className="bracket-col col-r16">
+                          <div className="bracket-col-title">Octavos (Izq)</div>
+                          <div className="bracket-col-matches">
+                            {leftR16.map(id => renderMatchCardCompact(id))}
+                          </div>
+                        </div>
+
+                        <div className="bracket-col col-qf">
+                          <div className="bracket-col-title">Cuartos (Izq)</div>
+                          <div className="bracket-col-matches">
+                            {leftQF.map(id => renderMatchCardCompact(id))}
+                          </div>
+                        </div>
+
+                        <div className="bracket-col col-sf">
+                          <div className="bracket-col-title">Semis (Izq)</div>
+                          <div className="bracket-col-matches">
+                            {leftSF.map(id => renderMatchCardCompact(id))}
+                          </div>
+                        </div>
+
+                        <div className="bracket-col col-finals">
+                          <div className="bracket-col-title">Finales</div>
+                          <div className="bracket-col-matches finals-grid">
+                            <div className="finals-group main-final-grid">
+                              <div className="finals-title gold-text">🏆 FINAL</div>
+                              {renderMatchCardCompact(104)}
+                            </div>
+                            <div className="finals-group third-place-grid">
+                              <div className="finals-title text-dim">🥉 TERCER PUESTO</div>
+                              {renderMatchCardCompact(103)}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="bracket-col col-sf">
+                          <div className="bracket-col-title">Semis (Der)</div>
+                          <div className="bracket-col-matches">
+                            {rightSF.map(id => renderMatchCardCompact(id))}
+                          </div>
+                        </div>
+
+                        <div className="bracket-col col-qf">
+                          <div className="bracket-col-title">Cuartos (Der)</div>
+                          <div className="bracket-col-matches">
+                            {rightQF.map(id => renderMatchCardCompact(id))}
+                          </div>
+                        </div>
+
+                        <div className="bracket-col col-r16">
+                          <div className="bracket-col-title">Octavos (Der)</div>
+                          <div className="bracket-col-matches">
+                            {rightR16.map(id => renderMatchCardCompact(id))}
+                          </div>
+                        </div>
+
+                        <div className="bracket-col col-r32">
+                          <div className="bracket-col-title">R32 (Der)</div>
+                          <div className="bracket-col-matches">
+                            {rightR32.map(id => renderMatchCardCompact(id))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    {saveButton}
+                  </div>
+                );
+              } else {
+                const rounds = [
+                  { name: "Dieciseisavos de Final (R32)", ids: [73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88] },
+                  { name: "Octavos de Final (R16)", ids: [89, 90, 91, 92, 93, 94, 95, 96] },
+                  { name: "Cuartos de Final (QF)", ids: [97, 98, 99, 100] },
+                  { name: "Semifinales (SF)", ids: [101, 102] },
+                  { name: "Tercer Puesto y Final", ids: [103, 104] }
+                ];
+                
+                return (
+                  <div className="list-mode-wrapper fade-in">
+                    {rounds.map(round => (
+                      <div key={round.name} className="bracket-round-section" style={{ marginBottom: "32px" }}>
+                        <h4 className="text-bebas" style={{ fontSize: "20px", color: "var(--accent)", borderBottom: "1px solid var(--border)", paddingBottom: "6px", marginBottom: "16px" }}>
+                          {round.name}
+                        </h4>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: "16px" }}>
+                          {round.ids.map(id => renderMatchCardCompact(id))}
+                        </div>
+                      </div>
+                    ))}
+                    {saveButton}
+                  </div>
+                );
+              }
             })()}
           </div>
         )}

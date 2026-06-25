@@ -1874,3 +1874,77 @@ body {
 .sim-source-selector button {
   text-transform: none;
 }
+
+/* Inline bracket inputs and penalty shootouts styling */
+.bracket-score-input-inline {
+  width: 32px;
+  height: 24px;
+  background: rgba(3, 4, 8, 0.6);
+  border: 1px solid rgba(0, 242, 254, 0.2);
+  border-radius: 4px;
+  color: var(--accent);
+  text-align: center;
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 13px;
+  padding: 0;
+  outline: none;
+  transition: all 0.15s ease-in-out;
+}
+
+.bracket-score-input-inline:focus {
+  border-color: var(--pink);
+  box-shadow: 0 0 6px rgba(245, 51, 255, 0.4);
+  color: #fff;
+}
+
+.bracket-score-input-inline:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/* Remove number input spinners */
+.bracket-score-input-inline::-webkit-outer-spin-button,
+.bracket-score-input-inline::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.bracket-score-input-inline {
+  -moz-appearance: textfield;
+}
+
+.penalty-tiebreaker-inline {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  margin-top: 2px;
+  background: rgba(2, 2, 6, 0.3);
+  border-radius: 0 0 8px 8px;
+}
+
+.penalty-btn-mini {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text-dim);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 9px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.penalty-btn-mini:hover {
+  background: rgba(0, 242, 254, 0.1);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.penalty-btn-mini.active {
+  background: linear-gradient(135deg, #f533ff 0%, #ff6ea7 100%);
+  border-color: var(--pink);
+  color: white;
+  box-shadow: 0 0 8px rgba(245, 51, 255, 0.4);
+}
