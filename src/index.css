@@ -1915,36 +1915,57 @@ body {
 
 .penalty-tiebreaker-inline {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 4px 8px;
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
-  margin-top: 2px;
-  background: rgba(2, 2, 6, 0.3);
-  border-radius: 0 0 8px 8px;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  margin-top: 8px;
+  background: rgba(2, 2, 6, 0.5);
+  border-radius: 6px;
+  align-items: stretch;
 }
 
-.penalty-btn-mini {
-  background: rgba(255, 255, 255, 0.05);
+.penalty-label {
+  font-size: 10px;
+  color: var(--accent);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  text-align: center;
+  margin-bottom: 2px;
+}
+
+.penalty-buttons-container {
+  display: flex;
+  gap: 8px;
+}
+
+.penalty-btn-choice {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.1);
   color: var(--text-dim);
-  border-radius: 4px;
-  padding: 1px 6px;
-  font-size: 9px;
-  font-weight: bold;
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 11px;
+  font-weight: 700;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all 0.2s ease-in-out;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
 }
 
-.penalty-btn-mini:hover {
-  background: rgba(0, 242, 254, 0.1);
-  border-color: var(--accent);
+.penalty-btn-choice:hover:not(.active) {
+  background: rgba(0, 242, 254, 0.08);
+  border-color: rgba(0, 242, 254, 0.3);
   color: var(--accent);
 }
 
-.penalty-btn-mini.active {
-  background: linear-gradient(135deg, #f533ff 0%, #ff6ea7 100%);
-  border-color: var(--pink);
-  color: white;
-  box-shadow: 0 0 8px rgba(245, 51, 255, 0.4);
+.penalty-btn-choice.active {
+  background: linear-gradient(135deg, #00ff88 0%, #00b359 100%);
+  border-color: var(--green);
+  color: #020206;
+  box-shadow: 0 0 10px rgba(0, 255, 136, 0.3);
 }

@@ -650,8 +650,8 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [compareMode, setCompareMode] = useState(false);
-  const [bracketSource, setBracketSource] = useState("db");
-  const [bracketViewMode, setBracketViewMode] = useState("tree");
+  const [bracketSource] = useState("db");
+  const [bracketViewMode] = useState("list");
 
   const [adminSearch, setAdminSearch] = useState("");
   const [adminStatus, setAdminStatus] = useState("pending");
@@ -2097,35 +2097,22 @@ export default function App() {
               </ul>
             </div>
 
-            <div className="sim-source-selector" style={{ marginBottom: "20px", display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
-              <span style={{ fontWeight: "bold", fontSize: "13.5px", color: "var(--text-dim)" }}>Fuente de Cruces R32:</span>
-              <button onClick={() => setBracketSource("db")} className={`btn-tab-pill ${bracketSource==="db"?'active':''}`}>Oficiales Publicados</button>
-              <button onClick={() => setBracketSource("pred")} className={`btn-tab-pill ${bracketSource==="pred"?'active':''}`}>Standings Mis Pred.</button>
-              <button onClick={() => setBracketSource("real")} className={`btn-tab-pill ${bracketSource==="real"?'active':''}`}>Standings Reales</button>
-              <button onClick={() => setBracketSource("demo")} className={`btn-tab-pill ${bracketSource==="demo"?'active':''}`}>Modo Demo (Ficticios)</button>
-            </div>
-
-            <div className="view-mode-selector" style={{ marginBottom: "20px", display: "flex", gap: "10px" }}>
-              <button onClick={() => setBracketViewMode("tree")} className={`btn-tab-pill ${bracketViewMode==="tree"?'active':''}`}>🌳 Vista de Árbol (Visual)</button>
-              <button onClick={() => setBracketViewMode("list")} className={`btn-tab-pill ${bracketViewMode==="list"?'active':''}`}>📝 Vista de Lista (Llenar Rápido)</button>
-            </div>
-
             {(() => {
               const hasMatches = matches.some(m => m.id === 73);
-              if (bracketSource === "db" && !hasMatches) {
+              if (!hasMatches) {
                 return (
                   <div className="glass-card text-center" style={{ padding: "40px 20px" }}>
                     <div style={{ fontSize: 44, marginBottom: 12 }}>⏳</div>
                     <div style={{ color: "var(--text-dim)", fontWeight: 700, marginBottom: "12px" }}>Los cruces oficiales aún no están publicados.</div>
                     <div style={{ fontSize: "13px", color: "var(--text-muted)" }}>
-                      Podés simular interactivamente seleccionando las fuentes <strong>"Standings Mis Pred."</strong> o <strong>"Modo Demo"</strong> arriba.
+                      Las predicciones del bracket se abrirán en cuanto finalice la fase de grupos y el administrador publique los cruces oficiales.
                     </div>
                   </div>
                 );
               }
 
               const merged = getBracketDraftsMerged();
-              const userBracket = resolvePredictionsWithSource(merged, mergedMatches, bracketSource);
+              const userBracket = resolvePredictionsWithSource(merged, mergedMatches, "db");
               const realResolved = resolveRealResults(mergedMatches);
 
               const handleScoreChange = (mid, side, value) => {
@@ -2154,14 +2141,14 @@ export default function App() {
                 });
               };
 
-              const renderMatchCardCompact = (matchId) => {
+              const renderMatchCardCompact = (matchId, readOnly = false) => {
                 const m = userBracket[matchId];
                 if (!m) return null;
                 const r = realResolved[matchId];
                 
                 const isHomePlaceholder = !m.home || m.home.startsWith("Ganador P") || m.home.startsWith("Perdedor P") || m.home === "";
                 const isAwayPlaceholder = !m.away || m.away.startsWith("Ganador P") || m.away.startsWith("Perdedor P") || m.away === "";
-                const isDisabled = isHomePlaceholder || isAwayPlaceholder;
+                const isDisabled = isHomePlaceholder || isAwayPlaceholder || readOnly;
                 
                 const draft = drafts[m.id] || {};
                 const dbPred = preds.find(p => p.match_id === m.id);
@@ -2200,7 +2187,7 @@ export default function App() {
                 }
                 
                 return (
-                  <div key={m.id} className={`bracket-match-card ${m.winner ? "has-winner" : ""} ${isDisabled ? "is-disabled" : ""}`} style={{ height: isTie ? "128px" : "96px" }}>
+                  <div key={m.id} className={`bracket-match-card ${m.winner ? "has-winner" : ""} ${isDisabled && !readOnly ? "is-disabled" : ""}`} style={{ minHeight: isTie ? "170px" : "110px", height: "auto" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", height: "14px" }}>
                       <span className="bracket-match-num">Match #{m.id}</span>
                       {hasAncestorError && <span className="badge badge-warning" style={{ fontSize: "8.5px", padding: "1px 4px" }} title="Rival diferente en ronda previa. No sumará exacto.">⚠️ Rival diff</span>}
@@ -2242,34 +2229,48 @@ export default function App() {
                       </div>
                     </div>
                     
-                    {isTie && !isDisabled && (
-                      <div className="penalty-tiebreaker-inline">
-                        <span style={{ fontSize: 9, color: "var(--text-dim)" }}>Penales:</span>
-                        <div style={{ display: "flex", gap: 4 }}>
-                          <button onClick={() => handleSelectPenaltyWinner(m.id, "home")} className={`penalty-btn-mini ${penaltyWinner === "home" ? "active" : ""}`}>L</button>
-                          <button onClick={() => handleSelectPenaltyWinner(m.id, "away")} className={`penalty-btn-mini ${penaltyWinner === "away" ? "active" : ""}`}>V</button>
+                    {isTie && (
+                      readOnly ? (
+                        <div className="penalty-winner-text" style={{ fontSize: "11px", color: "var(--green)", marginTop: "8px", textAlign: "center", fontWeight: "bold" }}>
+                          🏆 Pasa: {m.winner}
                         </div>
-                      </div>
+                      ) : (
+                        !isDisabled && (
+                          <div className="penalty-tiebreaker-inline">
+                            <div className="penalty-label">⚡ Empate - Clasifica:</div>
+                            <div className="penalty-buttons-container">
+                              <button 
+                                type="button"
+                                onClick={() => handleSelectPenaltyWinner(m.id, "home")} 
+                                className={`penalty-btn-choice ${penaltyWinner === "home" ? "active" : ""}`}
+                              >
+                                🏆 Avanza {m.home}
+                              </button>
+                              <button 
+                                type="button"
+                                onClick={() => handleSelectPenaltyWinner(m.id, "away")} 
+                                className={`penalty-btn-choice ${penaltyWinner === "away" ? "active" : ""}`}
+                              >
+                                🏆 Avanza {m.away}
+                              </button>
+                            </div>
+                          </div>
+                        )
+                      )
                     )}
                   </div>
                 );
               };
 
-              const saveButton = bracketSource === "db" ? (
+              const saveButton = (
                 <div style={{ display: "flex", justifyContent: "center", margin: "24px 0" }}>
                   <button onClick={saveBracketPredictions} disabled={sending} className="btn-primary" style={{ padding: "12px 32px", fontSize: "16px", borderRadius: "14px", fontWeight: "bold", width: "100%", maxWidth: "400px" }}>
                     {sending ? "Guardando..." : "🔒 Guardar Todo el Bracket"}
                   </button>
                 </div>
-              ) : (
-                <div className="glass-card text-center" style={{ margin: "20px 0", border: "1px dashed var(--border)", padding: "14px" }}>
-                  <span style={{ fontSize: 13, color: "var(--text-dim)" }}>
-                    ⚠️ Estás en modo simulación (<strong>{bracketSource === "pred" ? "Standings de Mis Pred." : "Modo Demo"}</strong>). No se pueden guardar predicciones en este modo. Selecciona <strong>"Oficiales Publicados"</strong> para guardar.
-                  </span>
-                </div>
               );
 
-              if (bracketViewMode === "tree") {
+              const renderTreeView = () => {
                 const leftR32 = [73, 75, 74, 77, 83, 84, 81, 82];
                 const leftR16 = [90, 89, 93, 94];
                 const leftQF  = [97, 98];
@@ -2287,28 +2288,28 @@ export default function App() {
                         <div className="bracket-col col-r32">
                           <div className="bracket-col-title">R32 (Izq)</div>
                           <div className="bracket-col-matches">
-                            {leftR32.map(id => renderMatchCardCompact(id))}
+                            {leftR32.map(id => renderMatchCardCompact(id, true))}
                           </div>
                         </div>
 
                         <div className="bracket-col col-r16">
                           <div className="bracket-col-title">Octavos (Izq)</div>
                           <div className="bracket-col-matches">
-                            {leftR16.map(id => renderMatchCardCompact(id))}
+                            {leftR16.map(id => renderMatchCardCompact(id, true))}
                           </div>
                         </div>
 
                         <div className="bracket-col col-qf">
                           <div className="bracket-col-title">Cuartos (Izq)</div>
                           <div className="bracket-col-matches">
-                            {leftQF.map(id => renderMatchCardCompact(id))}
+                            {leftQF.map(id => renderMatchCardCompact(id, true))}
                           </div>
                         </div>
 
                         <div className="bracket-col col-sf">
                           <div className="bracket-col-title">Semis (Izq)</div>
                           <div className="bracket-col-matches">
-                            {leftSF.map(id => renderMatchCardCompact(id))}
+                            {leftSF.map(id => renderMatchCardCompact(id, true))}
                           </div>
                         </div>
 
@@ -2317,11 +2318,11 @@ export default function App() {
                           <div className="bracket-col-matches finals-grid">
                             <div className="finals-group main-final-grid">
                               <div className="finals-title gold-text">🏆 FINAL</div>
-                              {renderMatchCardCompact(104)}
+                              {renderMatchCardCompact(104, true)}
                             </div>
                             <div className="finals-group third-place-grid">
                               <div className="finals-title text-dim">🥉 TERCER PUESTO</div>
-                              {renderMatchCardCompact(103)}
+                              {renderMatchCardCompact(103, true)}
                             </div>
                           </div>
                         </div>
@@ -2329,60 +2330,72 @@ export default function App() {
                         <div className="bracket-col col-sf">
                           <div className="bracket-col-title">Semis (Der)</div>
                           <div className="bracket-col-matches">
-                            {rightSF.map(id => renderMatchCardCompact(id))}
+                            {rightSF.map(id => renderMatchCardCompact(id, true))}
                           </div>
                         </div>
 
                         <div className="bracket-col col-qf">
                           <div className="bracket-col-title">Cuartos (Der)</div>
                           <div className="bracket-col-matches">
-                            {rightQF.map(id => renderMatchCardCompact(id))}
+                            {rightQF.map(id => renderMatchCardCompact(id, true))}
                           </div>
                         </div>
 
                         <div className="bracket-col col-r16">
                           <div className="bracket-col-title">Octavos (Der)</div>
                           <div className="bracket-col-matches">
-                            {rightR16.map(id => renderMatchCardCompact(id))}
+                            {rightR16.map(id => renderMatchCardCompact(id, true))}
                           </div>
                         </div>
 
                         <div className="bracket-col col-r32">
                           <div className="bracket-col-title">R32 (Der)</div>
                           <div className="bracket-col-matches">
-                            {rightR32.map(id => renderMatchCardCompact(id))}
+                            {rightR32.map(id => renderMatchCardCompact(id, true))}
                           </div>
                         </div>
                       </div>
                     </div>
-                    {saveButton}
                   </div>
                 );
-              } else {
-                const rounds = [
-                  { name: "Dieciseisavos de Final (R32)", ids: [73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88] },
-                  { name: "Octavos de Final (R16)", ids: [89, 90, 91, 92, 93, 94, 95, 96] },
-                  { name: "Cuartos de Final (QF)", ids: [97, 98, 99, 100] },
-                  { name: "Semifinales (SF)", ids: [101, 102] },
-                  { name: "Tercer Puesto y Final", ids: [103, 104] }
-                ];
-                
-                return (
-                  <div className="list-mode-wrapper fade-in">
-                    {rounds.map(round => (
-                      <div key={round.name} className="bracket-round-section" style={{ marginBottom: "32px" }}>
-                        <h4 className="text-bebas" style={{ fontSize: "20px", color: "var(--accent)", borderBottom: "1px solid var(--border)", paddingBottom: "6px", marginBottom: "16px" }}>
-                          {round.name}
-                        </h4>
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: "16px" }}>
-                          {round.ids.map(id => renderMatchCardCompact(id))}
-                        </div>
+              };
+
+              const rounds = [
+                { name: "Dieciseisavos de Final (R32)", ids: [73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88] },
+                { name: "Octavos de Final (R16)", ids: [89, 90, 91, 92, 93, 94, 95, 96] },
+                { name: "Cuartos de Final (QF)", ids: [97, 98, 99, 100] },
+                { name: "Semifinales (SF)", ids: [101, 102] },
+                { name: "Tercer Puesto y Final", ids: [103, 104] }
+              ];
+              
+              return (
+                <div className="list-mode-wrapper fade-in">
+                  {rounds.map(round => (
+                    <div key={round.name} className="bracket-round-section" style={{ marginBottom: "32px" }}>
+                      <h4 className="text-bebas" style={{ fontSize: "20px", color: "var(--accent)", borderBottom: "1px solid var(--border)", paddingBottom: "6px", marginBottom: "16px" }}>
+                        {round.name}
+                      </h4>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: "16px" }}>
+                        {round.ids.map(id => renderMatchCardCompact(id, false))}
                       </div>
-                    ))}
-                    {saveButton}
-                  </div>
-                );
-              }
+                    </div>
+                  ))}
+                  
+                  {saveButton}
+
+                  <details style={{ marginTop: "40px", border: "1px solid var(--border)", borderRadius: "16px", background: "rgba(9, 11, 24, 0.3)" }} className="glass-card">
+                    <summary style={{ cursor: "pointer", padding: "8px 12px", fontWeight: "bold", color: "var(--accent)", outline: "none", display: "list-item" }} className="text-bebas">
+                      👁️ VER DIAGRAMA VISUAL DEL BRACKET (VISTA PREVIA DE CONTROL)
+                    </summary>
+                    <div style={{ marginTop: "16px" }}>
+                      <p style={{ fontSize: "12px", color: "var(--text-dim)", marginBottom: "16px" }}>
+                        Esta es una vista previa gráfica de cómo va avanzando tu bracket. Completá los resultados en la lista superior para ver las actualizaciones en el diagrama.
+                      </p>
+                      {renderTreeView()}
+                    </div>
+                  </details>
+                </div>
+              );
             })()}
           </div>
         )}
