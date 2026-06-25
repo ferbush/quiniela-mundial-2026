@@ -2099,20 +2099,8 @@ export default function App() {
 
             {(() => {
               const hasMatches = matches.some(m => m.id === 73);
-              if (!hasMatches) {
-                return (
-                  <div className="glass-card text-center" style={{ padding: "40px 20px" }}>
-                    <div style={{ fontSize: 44, marginBottom: 12 }}>⏳</div>
-                    <div style={{ color: "var(--text-dim)", fontWeight: 700, marginBottom: "12px" }}>Los cruces oficiales aún no están publicados.</div>
-                    <div style={{ fontSize: "13px", color: "var(--text-muted)" }}>
-                      Las predicciones del bracket se abrirán en cuanto finalice la fase de grupos y el administrador publique los cruces oficiales.
-                    </div>
-                  </div>
-                );
-              }
-
               const merged = getBracketDraftsMerged();
-              const userBracket = resolvePredictionsWithSource(merged, mergedMatches, "db");
+              const userBracket = resolvePredictionsWithSource(merged, mergedMatches, hasMatches ? "db" : "pred");
               const realResolved = resolveRealResults(mergedMatches);
 
               const handleScoreChange = (mid, side, value) => {
@@ -2262,11 +2250,17 @@ export default function App() {
                 );
               };
 
-              const saveButton = (
+              const saveButton = hasMatches ? (
                 <div style={{ display: "flex", justifyContent: "center", margin: "24px 0" }}>
                   <button onClick={saveBracketPredictions} disabled={sending} className="btn-primary" style={{ padding: "12px 32px", fontSize: "16px", borderRadius: "14px", fontWeight: "bold", width: "100%", maxWidth: "400px" }}>
                     {sending ? "Guardando..." : "🔒 Guardar Todo el Bracket"}
                   </button>
+                </div>
+              ) : (
+                <div className="glass-card text-center" style={{ margin: "20px 0", border: "1px dashed var(--border)", padding: "16px 20px" }}>
+                  <span style={{ fontSize: 13, color: "var(--text-dim)", fontWeight: "500" }}>
+                    🔒 El guardado oficial de predicciones se habilitará cuando finalice la fase de grupos y el administrador publique los cruces reales de octavos. ¡Mientras tanto, podés probar tu simulación arriba!
+                  </span>
                 </div>
               );
 
@@ -2370,6 +2364,16 @@ export default function App() {
               
               return (
                 <div className="list-mode-wrapper fade-in">
+                  {!hasMatches && (
+                    <div className="glass-card" style={{ marginBottom: "24px", border: "1px dashed var(--pink)", padding: "16px 20px" }}>
+                      <h4 style={{ margin: "0 0 6px 0", color: "var(--pink)", display: "flex", alignItems: "center", gap: "8px", fontSize: "14px" }} className="text-bebas">
+                        <span>🧪</span> MODO SIMULACIÓN ACTIVO
+                      </h4>
+                      <p style={{ margin: 0, fontSize: "13px", color: "var(--text-dim)", lineHeight: "1.5" }}>
+                        Los partidos oficiales de eliminación directa aún no se publican. Abajo podés simular tu bracket en base a <strong>tus predicciones de fase de grupos</strong> (los clasificados se calculan automáticamente según el reglamento FIFA).
+                      </p>
+                    </div>
+                  )}
                   {rounds.map(round => (
                     <div key={round.name} className="bracket-round-section" style={{ marginBottom: "32px" }}>
                       <h4 className="text-bebas" style={{ fontSize: "20px", color: "var(--accent)", borderBottom: "1px solid var(--border)", paddingBottom: "6px", marginBottom: "16px" }}>
