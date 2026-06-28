@@ -381,10 +381,14 @@ function getMatchPointsUnified(matchId, predResolved, realResolved) {
     return 0;
   }
   if (matchId <= 72) {
-    if (p.score_home === r.score_home && p.score_away === r.score_away) return 5;
+    if (p.score_home === r.score_home && p.score_away === r.score_away) return 6;
     const pSide = p.score_home > p.score_away ? "H" : (p.score_home < p.score_away ? "A" : "D");
     const rSide = r.score_home > r.score_away ? "H" : (r.score_home < r.score_away ? "A" : "D");
-    return pSide === rSide ? 3 : 0;
+    if (pSide === rSide) {
+      if (pSide === "D") return 1;
+      return 3;
+    }
+    return 0;
   } else {
     const isWinnerCorrect = (p.winner === r.winner && r.winner !== null);
     if (!isWinnerCorrect) return 0;
@@ -409,7 +413,7 @@ function getMatchPointsUnified(matchId, predResolved, realResolved) {
           if (!isAncMatchupCorrect) { hasAncestorError = true; break; }
         }
         if (!hasAncestorError) {
-          basePoints += 2;
+          basePoints += 3; // 6 base points max
         }
       }
     }
@@ -438,8 +442,8 @@ function getParticipantStats(participantId, allPreds, matchesList) {
       const r = realResolved[m.id];
       if (p && r && p.score_home !== null && p.score_away !== null) {
         if (m.id <= 72) {
-          if (pPoints === 5) ex++;
-          else if (pPoints === 3) ac++;
+          if (pPoints === 6) ex++;
+          else if (pPoints === 3 || pPoints === 1) ac++;
         } else {
           const isWinnerCorrect = (p.winner === r.winner && r.winner !== null);
           if (isWinnerCorrect) {
@@ -650,6 +654,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [compareMode, setCompareMode] = useState(false);
+  const [transparencyTab, setTransparencyTab] = useState("list");
   const [bracketSource] = useState("db");
   const [bracketViewMode] = useState("list");
 
@@ -889,20 +894,57 @@ export default function App() {
     setErr("");
     setOk("");
     
+    // 1. Fetch current predictions backup first
+    let backup = [];
     try {
+      const existingPreds = await supa(`predictions?participant_id=eq.${user.id}&match_id=gte.73`);
+      backup = existingPreds || [];
+    } catch (e) {
+      setErr("Error de conexión al verificar tus predicciones anteriores. No se realizaron cambios.");
+      setSending(false);
+      return;
+    }
+    
+    try {
+      // 2. Delete existing bracket predictions
       await supa(`predictions?participant_id=eq.${user.id}&match_id=gte.73`, {
         method: "DELETE"
       });
+      
+      // 3. Post new predictions
       const payload = bracketMatchesToSave.map(p => ({
         participant_id: user.id,
         match_id: p.match_id,
         pred_home: p.pred_home,
         pred_away: p.pred_away
       }));
-      await supa("predictions", {
-        method: "POST",
-        body: JSON.stringify(payload)
-      });
+      
+      try {
+        await supa("predictions", {
+          method: "POST",
+          body: JSON.stringify(payload)
+        });
+      } catch (postError) {
+        // 4. Fallback: Restore the backup if insertion failed
+        if (backup.length > 0) {
+          const restorePayload = backup.map(b => ({
+            participant_id: b.participant_id,
+            match_id: b.match_id,
+            pred_home: b.pred_home,
+            pred_away: b.pred_away
+          }));
+          try {
+            await supa("predictions", {
+              method: "POST",
+              body: JSON.stringify(restorePayload)
+            });
+          } catch (restoreError) {
+            console.error("Critical: Failed to restore backup!", restoreError);
+          }
+        }
+        throw new Error("El servidor rechazó el guardado del nuevo bracket. Se restauró tu versión anterior: " + postError.message);
+      }
+      
       await load();
       setOk("¡Bracket guardado con éxito! 🔒");
       triggerConfetti();
@@ -913,9 +955,6 @@ export default function App() {
   };
 
   const publishKnockoutMatches = async () => {
-    const confirm = window.confirm("¿Estás seguro de que quieres publicar los partidos de eliminación directa en la base de datos? Esto permitirá a los usuarios ingresar sus predicciones.");
-    if (!confirm) return;
-    
     const r32TeamMap = getBracketR32TeamMap("real");
     
     const r32Defs = [
@@ -963,7 +1002,32 @@ export default function App() {
     try {
       const existing = await supa("matches?match_number=gte.73");
       if (existing && existing.length > 0) {
-        alert("Los partidos de eliminación directa ya están publicados en la base de datos.");
+        const confirmUpdate = window.confirm("Los partidos de eliminación directa ya están publicados en la base de datos. ¿Deseas actualizar los equipos del Round of 32 según las posiciones reales actuales?");
+        if (!confirmUpdate) {
+          setSending(false);
+          return;
+        }
+        
+        for (const d of r32Defs) {
+          const teamHome = r32TeamMap[d.h]?.name || `2° ${d.h[1]}`;
+          const teamAway = r32TeamMap[d.a]?.name || (d.a.startsWith("3rd_") ? `3° ${d.a.split("_")[1] || ""}` : `2° ${d.a[1]}`);
+          await supa(`matches?id=eq.${d.id}`, {
+            method: "PATCH",
+            body: JSON.stringify({
+              team_home: teamHome,
+              team_away: teamAway
+            })
+          });
+        }
+        
+        alert("¡Cruces de eliminación directa actualizados con éxito!");
+        await load();
+        setSending(false);
+        return;
+      }
+      
+      const confirmPublish = window.confirm("¿Estás seguro de que quieres publicar los partidos de eliminación directa en la base de datos? Esto permitirá a los usuarios ingresar sus predicciones.");
+      if (!confirmPublish) {
         setSending(false);
         return;
       }
@@ -975,7 +1039,7 @@ export default function App() {
           match_number: d.id,
           group_name: null,
           team_home: r32TeamMap[d.h]?.name || `2° ${d.h[1]}`,
-          team_away: r32TeamMap[d.a]?.name || `3° ${d.a.split("_")[1] || ""}`,
+          team_away: r32TeamMap[d.a]?.name || (d.a.startsWith("3rd_") ? `3° ${d.a.split("_")[1] || ""}` : `2° ${d.a[1]}`),
           match_date: d.date,
           phase: "r32",
           score_home: null,
@@ -1005,9 +1069,9 @@ export default function App() {
       });
       
       alert("¡Partidos de eliminación directa publicados con éxito!");
-      load();
+      await load();
     } catch (e) {
-      alert("Error al publicar partidos: " + e.message);
+      alert("Error al publicar/actualizar partidos: " + e.message);
     }
     setSending(false);
   };
@@ -1071,19 +1135,59 @@ export default function App() {
     setDrafts({}); await load(); setOk(`${n} predicciones bloqueadas ✓`); setSending(false);triggerConfetti();
   };
 
-  const updResult = async (mid,sh,sa) => {
+  const updResult = async (mid, sh, sa, winTeam = null) => {
     if(!user?.is_admin) return;
-    try { await supa(`matches?id=eq.${mid}`,{method:"PATCH",headers:{...hdrs,Prefer:"return=representation"},body:JSON.stringify({score_home:parseInt(sh),score_away:parseInt(sa),is_finished:true})});
-      const freshPreds = await supa(`predictions?match_id=eq.${mid}`);
+    try { 
+      await supa(`matches?id=eq.${mid}`, {
+        method: "PATCH",
+        headers: { ...hdrs, Prefer: "return=representation" },
+        body: JSON.stringify({ score_home: parseInt(sh), score_away: parseInt(sa), is_finished: true })
+      });
+      
       const matchObj = matches.find(m => m.id === mid);
-      const phase = matchObj?.phase || "group";
+      const winner = winTeam || (parseInt(sh) > parseInt(sa) ? matchObj.team_home : matchObj.team_away);
+      
+      // Update child match (advance winner)
+      const child = matchChildren[mid];
+      if (child && winner) {
+        const payload = {};
+        if (child.slot === "home") payload.team_home = winner;
+        else payload.team_away = winner;
+        
+        await supa(`matches?id=eq.${child.id}`, {
+          method: "PATCH",
+          body: JSON.stringify(payload)
+        });
+      }
+      
+      // Semis logic for final and 3rd place
+      if ((mid === 101 || mid === 102) && winner) {
+        const loser = winner === matchObj.team_home ? matchObj.team_away : matchObj.team_home;
+        const finalSlot = mid === 101 ? "team_home" : "team_away";
+        const thirdSlot = mid === 101 ? "team_home" : "team_away";
+        
+        await supa(`matches?id=eq.104`, {
+          method: "PATCH",
+          body: JSON.stringify({ [finalSlot]: winner })
+        });
+        await supa(`matches?id=eq.103`, {
+          method: "PATCH",
+          body: JSON.stringify({ [thirdSlot]: loser })
+        });
+      }
+
+      const freshPreds = await supa(`predictions?match_id=eq.${mid}`);
       const updatedMatches = matches.map(m => m.id === mid ? { ...m, score_home: parseInt(sh), score_away: parseInt(sa), is_finished: true } : m);
       for(const pr of (freshPreds||[])){
         const pts = calcPtsForSinglePrediction(pr, { id: mid, score_home: parseInt(sh), score_away: parseInt(sa), is_finished: true }, updatedMatches, allPreds);
         await supa(`predictions?id=eq.${pr.id}`,{method:"PATCH",body:JSON.stringify({points_earned:pts})});
       }
-      await load(); setOk("Resultado y puntos actualizados ✓");
-    } catch(e){ setErr("Error: "+e.message); }
+      
+      await load(); 
+      setOk("Resultado, cruces y puntos actualizados ✓");
+    } catch(e){ 
+      setErr("Error: "+e.message); 
+    }
   };
 
   const mergedMatches = matches.map(dbMatch => ({
@@ -1091,6 +1195,8 @@ export default function App() {
     is_live: false,
     time_elapsed: dbMatch.is_finished ? "finished" : "notstarted"
   }));
+
+  const hasKnockoutMatches = matches.some(m => m.id === 73);
 
   const getQuickMatches = () => {
     const todayStr = (() => {
@@ -1133,6 +1239,26 @@ export default function App() {
     const stats = getParticipantStats(p.id, allPreds, mergedMatches);
     return { ...p, pts: stats.pts, ex: stats.ex, ac: stats.ac, tp: stats.tp };
   }).sort((a, b) => b.pts - a.pts || b.ex - a.ex || a.name.localeCompare(b.name));
+
+  const getGroupStageWinner = () => {
+    if (!parts.length) return null;
+    const list = parts.map(p => {
+      const userPreds = allPreds.filter(pr => pr.participant_id === p.id);
+      const realResolved = resolveRealResults(mergedMatches);
+      const predResolved = resolvePredictions(userPreds, mergedMatches);
+      let pts = 0;
+      mergedMatches.forEach(m => {
+        if (m.id <= 72 && m.is_finished) {
+          pts += getMatchPointsUnified(m.id, predResolved, realResolved);
+        }
+      });
+      return { ...p, pts };
+    }).sort((a, b) => b.pts - a.pts || a.name.localeCompare(b.name));
+    return list[0] || null;
+  };
+
+  const groupStageWinner = getGroupStageWinner();
+  const groupStageFinishedCount = mergedMatches.filter(m => m.id <= 72 && m.is_finished).length;
 
   const GS=["ALL","A","B","C","D","E","F","G","H","I","J","K","L"];
   const fm = grp==="ALL"?mergedMatches:mergedMatches.filter(m=>m.group_name===grp);
@@ -1253,8 +1379,8 @@ export default function App() {
           </div>
         )}
         <div className="login-rules">
-          ⚽ Acertar ganador/empate = <span className="text-blue">3 pts</span><br/>
-          🎯 Marcador exacto = <span className="text-green">5 pts</span><br/>
+          ⚽ Acertar ganador = <span className="text-blue">3 pts</span> | Acertar empate (no exacto) = <span className="text-blue">1 pt</span><br/>
+          🎯 Marcador exacto = <span className="text-green">6 pts</span> (Grupos y Brackets)<br/>
           🔒 Una vez enviada, la predicción se bloquea
         </div>
       </div>
@@ -1264,6 +1390,12 @@ export default function App() {
   // MAIN
   return(
     <div className="app-main-layout">
+      {/* Marquesina de Emoción - Fase Eliminatoria */}
+      <div className="elimination-marquee">
+        <div className="marquee-content">
+          <span>🔥 ¡FASE DE ELIMINACIÓN DIRECTA ACTIVADA! CADA DUELO ES A MATAR O MORIR · PREPARA TU BRACKET OFICIAL 🏆 ¡QUE COMIENCE LA MAGIA DE LOS BRACKETS! 🔒 GUARDADO DE PRONÓSTICOS DE BRACKETS EN VIVO 🔥 ¡FASE DE ELIMINACIÓN DIRECTA ACTIVADA! CADA DUELO ES A MATAR O MORIR · PREPARA TU BRACKET OFICIAL 🏆 ¡QUE COMIENCE LA MAGIA DE LOS BRACKETS! 🔒 GUARDADO DE PRONÓSTICOS DE BRACKETS EN VIVO</span>
+        </div>
+      </div>
       <div className="ambient-glow-1"></div>
       <div className="ambient-glow-2"></div>
       {/* Header */}
@@ -1285,8 +1417,8 @@ export default function App() {
       {/* Nav */}
       <nav className="nav-bar">
         <div className="nav-inner nav-container">
-          {[{id:"ranking",l:"🏅 Ranking",s:true},{id:"predictions",l:"📝 Predicciones",s:true},{id:"groups",l:"⚽ Grupos",s:true},{id:"results",l:"📊 Resultados",s:true},{id:"transparency",l:"👁️ Quinielas",s:true},{id:"brackets",l:"🌳 Sim. Brackets",s:user.is_admin},{id:"admin",l:"👑 Admin",s:user.is_admin}].filter(t=>t.s).map(tab=>(
-            <button key={tab.id} onClick={()=>{setView(tab.id); setSearchQuery(""); setStatusFilter("all"); setCompareMode(false);}} className={`nav-btn ${view===tab.id?'active':''}`}>{tab.l}</button>
+          {[{id:"ranking",l:"🏅 Ranking",s:true},{id:"predictions",l:"📝 Predicciones",s:true},{id:"real_bracket",l:"🌳 Bracket Real",s:true},{id:"groups",l:"⚽ Grupos",s:true},{id:"results",l:"📊 Resultados",s:true},{id:"transparency",l:"👁️ Quinielas",s:true},{id:"admin",l:"👑 Admin",s:user.is_admin}].filter(t=>t.s).map(tab=>(
+            <button key={tab.id} onClick={()=>{setView(tab.id); setSearchQuery(""); setStatusFilter("all"); setCompareMode(false); setTransparencyTab("list");}} className={`nav-btn ${view===tab.id?'active':''}`}>{tab.l}</button>
           ))}
         </div>
       </nav>
@@ -1298,20 +1430,22 @@ export default function App() {
         {/* RANKING */}
         {view==="ranking"&&(
           <div className="view-ranking fade-in">
-            {user?.is_admin && quickMatches.length > 0 && (
-              <div className="glass-card admin-quick-entry-card" style={{ marginBottom: 24, border: "1px solid rgba(245, 51, 255, 0.25)", padding: "20px 24px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 12 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ fontSize: 24 }}>⚡</span>
-                    <h3 className="section-title text-bebas" style={{ margin: 0, color: "var(--pink)" }}>REGISTRO RÁPIDO (HOY Y PENDIENTES)</h3>
+            {groupStageWinner && (
+              <div className="glass-card group-stage-winner-card fade-in" style={{ marginBottom: 24, border: "2px solid var(--gold)", background: "linear-gradient(135deg, rgba(255, 215, 0, 0.08) 0%, rgba(9, 11, 24, 0.7) 100%)", padding: "20px 24px", position: "relative", overflow: "hidden" }}>
+                <div className="winner-glow-effect"></div>
+                <div style={{ display: "flex", alignItems: "center", gap: "16px", flexWrap: "wrap" }}>
+                  <div style={{ fontSize: "40px", animation: "floatLogo 3s infinite ease-in-out" }}>👑</div>
+                  <div>
+                    <h3 className="text-bebas" style={{ margin: 0, fontSize: "20px", color: "var(--gold)", letterSpacing: "1.5px" }}>
+                      {groupStageFinishedCount >= 72 ? "🏆 GANADOR DE FASE DE GRUPOS" : "🏆 GANADOR DE FASE DE GRUPOS (PROVISIONAL)"}
+                    </h3>
+                    <h2 className="text-bebas" style={{ margin: "4px 0 0 0", fontSize: "28px", color: "#fff", textShadow: "0 0 10px rgba(255, 215, 0, 0.3)", letterSpacing: "1px" }}>
+                      {groupStageWinner.name} <span style={{ color: "var(--gold)", fontSize: "20px" }}>({groupStageWinner.pts} PTS)</span>
+                    </h2>
+                    <p style={{ margin: "4px 0 0 0", fontSize: "12px", color: "var(--text-dim)", fontWeight: "500" }}>
+                      {groupStageFinishedCount >= 72 ? "¡Felicidades por dominar la primera etapa de la copa mundial!" : `Calculado en base a ${groupStageFinishedCount} de 72 partidos jugados.`}
+                    </p>
                   </div>
-                  <span className="badge badge-warning">👑 Modo Admin</span>
-                </div>
-
-                <div className="fixtures-list">
-                  {quickMatches.map(m => (
-                    <AMC key={m.id} m={m} onU={updResult} />
-                  ))}
                 </div>
               </div>
             )}
@@ -1353,6 +1487,7 @@ export default function App() {
                       setSearchQuery("");
                       setStatusFilter("all");
                       setCompareMode(false);
+                      setTransparencyTab("list");
                     }}
                     title={`Ver quiniela de ${p.name}`}
                   >
@@ -1381,8 +1516,8 @@ export default function App() {
           </div>
         )}
 
-        {/* PREDICTIONS */}
-        {view==="predictions"&&(
+        {/* PREDICTIONS (GROUP STAGE - TEMPORARILY DISABLED) */}
+        {view==="predictions_old"&&(
           <div className="view-predictions fade-in">
             <div className="view-header-row">
               <h3 className="section-title text-bebas" style={{margin:0}}>📝 MIS PREDICCIONES</h3>
@@ -1530,12 +1665,12 @@ export default function App() {
                     if ((finished || isLive) && pred) {
                       if (pred.pred_home !== null && pred.pred_away !== null && match.score_home !== null && match.score_away !== null) {
                         if (pred.pred_home === match.score_home && pred.pred_away === match.score_away) {
-                          pts = 5;
+                          pts = 6;
                           isExact = true;
                         } else {
                           const pSide = pred.pred_home > pred.pred_away ? "H" : (pred.pred_home < pred.pred_away ? "A" : "D");
                           const rSide = match.score_home > match.score_away ? "H" : (match.score_home < match.score_away ? "A" : "D");
-                          pts = pSide === rSide ? 3 : 0;
+                          pts = pSide === rSide ? (pSide === "D" ? 1 : 3) : 0;
                           isWinner = pSide === rSide;
                         }
                       }
@@ -1827,238 +1962,432 @@ export default function App() {
                     </div>
                   </div>
                   
-                  <div className="search-filter-bar">
-                    <input 
-                      type="text" 
-                      placeholder="🔍 Buscar país..." 
-                      value={searchQuery}
-                      onChange={e => setSearchQuery(e.target.value)}
-                      className="search-input"
-                    />
+                  {/* Sub-pestañas: Lista de Predicciones vs Bracket del Participante */}
+                  <div className="subtabs-bar" style={{ marginBottom: "24px", display: "flex", gap: "10px" }}>
+                    <button onClick={()=>setTransparencyTab("list")} className={`btn-tab-pill ${transparencyTab==='list'?'active':''}`}>📝 Predicciones (Lista)</button>
+                    <button onClick={()=>setTransparencyTab("bracket")} className={`btn-tab-pill ${transparencyTab==='bracket'?'active':''}`}>🌳 Bracket Visual</button>
                   </div>
 
-                  {selectedPart.id !== user.id && (
-                    <div className="compare-toggle-row">
-                      <button onClick={() => setCompareMode(!compareMode)} className={`btn-tab-pill ${compareMode ? 'active' : ''}`}>
-                        ⚔️ {compareMode ? "Desactivar comparación" : "Comparar conmigo"}
-                      </button>
-                    </div>
-                  )}
+                  {transparencyTab === "list" ? (
+                    <>
+                      <div className="search-filter-bar">
+                        <input 
+                          type="text" 
+                          placeholder="🔍 Buscar país..." 
+                          value={searchQuery}
+                          onChange={e => setSearchQuery(e.target.value)}
+                          className="search-input"
+                        />
+                      </div>
 
-                  <GF gs={GS} sel={grp} set={setGrp}/>
-                  <div className="fixtures-list">
-                    {filteredMatches.map(match=>{
-                      const pResS = selectedPartResolved[match.id];
-                      const pResM = myPredsResolved[match.id];
-                      const rRes = realResolved[match.id];
-                      
-                      // COMPARISON MODE RENDERING
-                      if (compareMode) {
-                        const scoreS = pResS && pResS.score_home !== null && pResS.score_away !== null ? `${pResS.score_home} - ${pResS.score_away}${pResS.winner && pResS.score_home === pResS.score_away ? ` (${pResS.winner === pResS.home ? "L" : "V"})` : ""}` : "- : -";
-                        const scoreM = pResM && pResM.score_home !== null && pResM.score_away !== null ? `${pResM.score_home} - ${pResM.score_away}${pResM.winner && pResM.score_home === pResM.score_away ? ` (${pResM.winner === pResM.home ? "L" : "V"})` : ""}` : "- : -";
-                        const hasMyPred = pResM && pResM.score_home !== null;
-                        const hasPartPred = pResS && pResS.score_home !== null;
-                        
-                        let compClass = "match-card-conflict";
-                        let compBadgeText = "Diferente";
-                        let compBadgeClass = "badge-danger";
-                        
-                        if (!hasPartPred || !hasMyPred) {
-                          compClass = "";
-                          compBadgeText = "Sin predicción";
-                          compBadgeClass = "badge-neutral";
-                        } else {
-                          const sameScore = pResS.score_home === pResM.score_home && pResS.score_away === pResM.score_away;
-                          const outcomeS = pResS.score_home > pResS.score_away ? "H" : (pResS.score_home < pResS.score_away ? "A" : (pResS.winner === pResS.home ? "H" : "A"));
-                          const outcomeM = pResM.score_home > pResM.score_away ? "H" : (pResM.score_home < pResM.score_away ? "A" : (pResM.winner === pResM.home ? "H" : "A"));
-                          const sameOutcome = outcomeS === outcomeM;
+                      {selectedPart.id !== user.id && (
+                        <div className="compare-toggle-row">
+                          <button onClick={() => setCompareMode(!compareMode)} className={`btn-tab-pill ${compareMode ? 'active' : ''}`}>
+                            ⚔️ {compareMode ? "Desactivar comparación" : "Comparar conmigo"}
+                          </button>
+                        </div>
+                      )}
+
+                      <GF gs={GS} sel={grp} set={setGrp}/>
+                      <div className="fixtures-list">
+                        {filteredMatches.map(match=>{
+                          const pResS = selectedPartResolved[match.id];
+                          const pResM = myPredsResolved[match.id];
+                          const rRes = realResolved[match.id];
                           
-                          if (sameScore) {
-                            compClass = "match-card-exact-match";
-                            compBadgeText = "🎯 Coincidencia Exacta";
-                            compBadgeClass = "badge-success";
-                          } else if (sameOutcome) {
-                            compClass = "match-card-outcome-match";
-                            compBadgeText = "🔵 Mismo Ganador";
-                            compBadgeClass = "badge-info";
+                          // COMPARISON MODE RENDERING
+                          if (compareMode) {
+                            const scoreS = pResS && pResS.score_home !== null && pResS.score_away !== null ? `${pResS.score_home} - ${pResS.score_away}${pResS.winner && pResS.score_home === pResS.score_away ? ` (${pResS.winner === pResS.home ? "L" : "V"})` : ""}` : "- : -";
+                            const scoreM = pResM && pResM.score_home !== null && pResM.score_away !== null ? `${pResM.score_home} - ${pResM.score_away}${pResM.winner && pResM.score_home === pResM.score_away ? ` (${pResM.winner === pResM.home ? "L" : "V"})` : ""}` : "- : -";
+                            const hasMyPred = pResM && pResM.score_home !== null;
+                            const hasPartPred = pResS && pResS.score_home !== null;
+                            
+                            let compClass = "match-card-conflict";
+                            let compBadgeText = "Diferente";
+                            let compBadgeClass = "badge-danger";
+                            
+                            if (!hasPartPred || !hasMyPred) {
+                              compClass = "";
+                              compBadgeText = "Sin predicción";
+                              compBadgeClass = "badge-neutral";
+                            } else {
+                              const sameScore = pResS.score_home === pResM.score_home && pResS.score_away === pResM.score_away;
+                              const outcomeS = pResS.score_home > pResS.score_away ? "H" : (pResS.score_home < pResS.score_away ? "A" : (pResS.winner === pResS.home ? "H" : "A"));
+                              const outcomeM = pResM.score_home > pResM.score_away ? "H" : (pResM.score_home < pResM.score_away ? "A" : (pResM.winner === pResM.home ? "H" : "A"));
+                              const sameOutcome = outcomeS === outcomeM;
+                              
+                              if (sameScore) {
+                                compClass = "match-card-exact-match";
+                                compBadgeText = "🎯 Coincidencia Exacta";
+                                compBadgeClass = "badge-success";
+                              } else if (sameOutcome) {
+                                compClass = "match-card-outcome-match";
+                                compBadgeText = "🔵 Mismo Ganador";
+                                compBadgeClass = "badge-info";
+                              }
+                            }
+                            
+                            return (
+                              <div key={match.id} className={`match-card ${compClass} ${match.is_live ? "match-card-live" : ""}`}>
+                                <div className="match-card-header">
+                                  <span className="match-meta">
+                                    Grupo {match.group_name} · #{match.match_number} · {match.match_date}
+                                    {match.is_live && <span className="live-minute-badge"> {match.time_elapsed}'</span>}
+                                  </span>
+                                  <div style={{ display: "flex", gap: 6 }}>
+                                    {match.is_live && <span className="badge badge-live">● EN VIVO</span>}
+                                    <span className={`badge ${compBadgeClass}`}>{compBadgeText}</span>
+                                  </div>
+                                </div>
+                                <div className="comparison-fixture-row">
+                                  <div className="comparison-team-side">
+                                    <span className="team-name">{match.id <= 72 ? match.team_home : (pResS?.home || pResM?.home || match.team_home)}</span>
+                                    <span className="flag-emoji large">{gf(match.id <= 72 ? match.team_home : (pResS?.home || pResM?.home || match.team_home))}</span>
+                                  </div>
+                                  <div className="comparison-vs-badge">VS</div>
+                                  <div className="comparison-team-side text-left">
+                                    <span className="flag-emoji large">{gf(match.id <= 72 ? match.team_away : (pResS?.away || pResM?.away || match.team_away))}</span>
+                                    <span className="team-name">{match.id <= 72 ? match.team_away : (pResS?.away || pResM?.away || match.team_away)}</span>
+                                  </div>
+                                </div>
+                                <div className="comparison-predictions-grid">
+                                  <div className="comparison-user-prediction">
+                                    <div className="comparison-user-name">{selectedPart.name}</div>
+                                    <div className="comparison-score text-bebas" style={{ color: "var(--accent)" }}>{scoreS}</div>
+                                  </div>
+                                  <div className="comparison-user-prediction my-prediction-column">
+                                    <div className="comparison-user-name">Tú</div>
+                                    <div className="comparison-score text-bebas" style={{ color: hasMyPred ? "var(--green)" : "var(--accent)" }}>{scoreM}</div>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          }
+
+                          // STANDARD VIEW RENDERING
+                          const hasPartPred = pResS && pResS.score_home !== null;
+                          if(!hasPartPred) return(
+                            <div key={match.id} className={`match-card ${match.is_live ? "match-card-live" : "match-card-finished opacity-60"}`}>
+                              <div className="match-card-header">
+                                <span className="match-meta">
+                                  Grupo {match.group_name} · #{match.match_number}
+                                  {match.is_live && <span className="live-minute-badge"> {match.time_elapsed}'</span>}
+                                </span>
+                                {match.is_live ? (
+                                  <span className="badge badge-live">● EN VIVO</span>
+                                ) : (
+                                  <span className="badge badge-neutral">Sin predicción</span>
+                                )}
+                              </div>
+                              <div className="match-fixture-row">
+                                <div className="team-home">
+                                  <span className="team-name" style={{color:"var(--text-dim)"}}>{match.team_home}</span>
+                                  <span className="flag-emoji large" style={{opacity:0.5}}>{gf(match.team_home)}</span>
+                                </div>
+                                <div className="score-inputs-container">
+                                  <div className="locked-prediction text-bebas" style={{color:"var(--text-muted)"}}>- : -</div>
+                                </div>
+                                <div className="team-away">
+                                  <span className="flag-emoji large" style={{opacity:0.5}}>{gf(match.team_away)}</span>
+                                  <span className="team-name" style={{color:"var(--text-dim)"}}>{match.team_away}</span>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                          
+                          const finished = match.is_finished;
+                          const isLive = match.is_live;
+                          let pts = null;
+                          let isExact = false;
+                          let isWinner = false;
+                          let wasDemoted = false;
+                          
+                          if ((finished || isLive) && pResS && pResS.score_home !== null && pResS.score_away !== null && rRes && rRes.score_home !== null && rRes.score_away !== null) {
+                            pts = getMatchPointsUnified(match.id, selectedPartResolved, realResolved);
+                            
+                            if (match.id <= 72) {
+                              isExact = pts === 6;
+                              isWinner = pts === 3 || pts === 1;
+                            } else {
+                              const isWinnerCorrect = (pResS.winner === rRes.winner && rRes.winner !== null);
+                              if (isWinnerCorrect) {
+                                const isMatchupCorrect = (pResS.home === rRes.home && pResS.away === rRes.away) || (pResS.home === rRes.away && pResS.away === rRes.home);
+                                if (isMatchupCorrect) {
+                                  if (pResS.home === rRes.home) {
+                                    isExact = (pResS.score_home === rRes.score_home && pResS.score_away === rRes.score_away);
+                                  } else {
+                                    isExact = (pResS.score_home === rRes.score_away && pResS.score_away === rRes.score_home);
+                                  }
+                                }
+                                
+                                let hasAncestorError = false;
+                                if (isExact) {
+                                  const ancestors = getAncestors(match.id);
+                                  for (const aId of ancestors) {
+                                    const pAnc = selectedPartResolved[aId];
+                                    const rAnc = realResolved[aId];
+                                    if (!pAnc || !rAnc) { hasAncestorError = true; break; }
+                                    const isAncMatchupCorrect = (pAnc.home === rAnc.home && pAnc.away === rAnc.away) || (pAnc.home === rAnc.away && pAnc.away === rAnc.home);
+                                    if (!isAncMatchupCorrect) { hasAncestorError = true; break; }
+                                  }
+                                }
+                                
+                                if (isExact && hasAncestorError) {
+                                  isExact = false;
+                                  isWinner = true;
+                                  wasDemoted = true;
+                                } else {
+                                  isWinner = !isExact;
+                                }
+                              }
+                            }
+                          }
+                          
+                          let matchCardClass = "match-card";
+                          if(isLive){
+                            matchCardClass += " match-card-live";
+                          } else if(finished){
+                            if(isExact) matchCardClass += " match-card-exact";
+                            else if(isWinner) matchCardClass += " match-card-winner";
+                            else matchCardClass += " match-card-incorrect";
+                          } else {
+                            matchCardClass += " match-card-locked";
+                          }
+
+                          let liveGlowClass = "";
+                          if (isLive && pResS) {
+                            if (isExact) liveGlowClass = "live-glow-exact";
+                            else if (isWinner) liveGlowClass = "live-glow-winner";
+                          }
+
+                          return(
+                            <div key={match.id} className={matchCardClass}>
+                              <div className="match-card-header">
+                                <span className="match-meta">
+                                  {match.id <= 72 ? `Grupo ${match.group_name}` : "Eliminación Directa"} · #{match.match_number} · {match.match_date}
+                                  {isLive && <span className="live-minute-badge"> {match.time_elapsed}'</span>}
+                                </span>
+                                {isLive && <span className="badge badge-live">● EN VIVO</span>}
+                                {finished&&pts!==null&&<span className={`badge ${isExact?'badge-success':isWinner?'badge-info':'badge-danger'} badge-pts-earned`}>
+                                  {isExact ? `🎯 +${pts}` : isWinner ? (wasDemoted ? `✓ +${pts} (⚠️ Rival diferente)` : `✓ +${pts}`) : "✗ 0"}
+                                </span>}
+                                {isLive&&pts!==null&&pts>0&&<span className={`badge ${isExact?'badge-success-glow':'badge-info-glow'} badge-pts-earned`}>{isExact?`🎯 +${pts} (Parcial)`:`✓ +${pts} (Parcial)`}</span>}
+                                {!finished&&!isLive&&<span className="badge badge-success">🔒 Enviado</span>}
+                              </div>
+                              <div className="match-fixture-row">
+                                <div className="team-home">
+                                  <span className="team-name">{match.id <= 72 ? match.team_home : pResS.home}</span>
+                                  <span className="flag-emoji large">{gf(match.id <= 72 ? match.team_home : pResS.home)}</span>
+                                </div>
+                                <div className="score-inputs-container">
+                                  <div className={`locked-prediction text-bebas ${liveGlowClass}`}>
+                                    <span className="predicted-score">{pResS.score_home}</span>
+                                    <span className="score-separator">:</span>
+                                    <span className="predicted-score">{pResS.score_away}</span>
+                                  </div>
+                                  {match.id >= 73 && pResS && pResS.score_home !== null && pResS.score_home === pResS.score_away && (
+                                    <div className="penalty-winner-text" style={{ fontSize: "10px", color: "var(--accent)", marginTop: "4px", textAlign: "center" }}>
+                                      Pasa: {pResS.winner}
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="team-away">
+                                  <span className="flag-emoji large">{gf(match.id <= 72 ? match.team_away : pResS.away)}</span>
+                                  <span className="team-name">{match.id <= 72 ? match.team_away : pResS.away}</span>
+                                </div>
+                              </div>
+                              {(finished || isLive) && <div className="real-score-row">Resultado {isLive ? "parcial" : "real"}: <span className="real-score-accent text-bebas" style={{color: isLive ? "var(--green)" : "var(--accent)"}}>{rRes ? rRes.score_home : match.score_home} - {rRes ? rRes.score_away : match.score_away}</span></div>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {!filteredMatches.length&&<div className="no-data">No se encontraron partidos</div>}
+                    </>
+                  ) : (
+                    (() => {
+                      const hasMatches = matches.some(m => m.id === 73);
+                      const partBracket = resolvePredictionsWithSource(partPreds, mergedMatches, hasMatches ? "db" : "real");
+                      
+                      const renderPartMatchCardCompact = (matchId) => {
+                        const m = partBracket[matchId];
+                        if (!m) return null;
+                        const r = realResolved[matchId];
+                        const isTie = m.score_home !== null && m.score_away !== null && m.score_home === m.score_away;
+                        const isHomeWinner = m.winner === m.home && m.winner !== null;
+                        const isAwayWinner = m.winner === m.away && m.winner !== null;
+                        
+                        let hasAncestorError = false;
+                        if (r && r.is_finished) {
+                          const ancestors = getAncestors(m.id);
+                          for (const aId of ancestors) {
+                            const pAnc = partBracket[aId];
+                            const rAnc = realResolved[aId];
+                            if (!pAnc || !rAnc) { hasAncestorError = true; break; }
+                            const isAncMatchupCorrect = (pAnc.home === rAnc.home && pAnc.away === rAnc.away) || (pAnc.home === rAnc.away && pAnc.away === rAnc.home);
+                            if (!isAncMatchupCorrect) { hasAncestorError = true; break; }
                           }
                         }
                         
                         return (
-                          <div key={match.id} className={`match-card ${compClass} ${match.is_live ? "match-card-live" : ""}`}>
-                            <div className="match-card-header">
-                              <span className="match-meta">
-                                Grupo {match.group_name} · #{match.match_number} · {match.match_date}
-                                {match.is_live && <span className="live-minute-badge"> {match.time_elapsed}'</span>}
-                              </span>
-                              <div style={{ display: "flex", gap: 6 }}>
-                                {match.is_live && <span className="badge badge-live">● EN VIVO</span>}
-                                <span className={`badge ${compBadgeClass}`}>{compBadgeText}</span>
+                          <div key={m.id} className={`bracket-match-card ${m.winner ? "has-winner" : ""}`} style={{ minHeight: isTie ? "130px" : "110px", height: "auto" }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", height: "14px" }}>
+                              <span className="bracket-match-num">Match #{m.id}</span>
+                              {hasAncestorError && <span className="badge badge-warning" style={{ fontSize: "8.5px", padding: "1px 4px" }} title="Rival diferente en ronda previa. No sumará exacto.">⚠️ Rival diff</span>}
+                            </div>
+                            
+                            <div className="bracket-match-teams">
+                              <div className={`bracket-team-row ${isHomeWinner ? "is-winner" : ""}`}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, minWidth: 0 }}>
+                                  <span className="flag-emoji">{m.home ? gf(m.home) : "🏳️"}</span>
+                                  <span className="team-name" title={m.home}>{m.home || "-"}</span>
+                                </div>
+                                <span style={{ fontSize: 13, fontWeight: "bold", paddingRight: 4, color: "var(--accent)" }}>
+                                  {m.score_home !== null ? m.score_home : "-"}
+                                </span>
+                              </div>
+                              
+                              <div className={`bracket-team-row ${isAwayWinner ? "is-winner" : ""}`}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, minWidth: 0 }}>
+                                  <span className="flag-emoji">{m.away ? gf(m.away) : "🏳️"}</span>
+                                  <span className="team-name" title={m.away}>{m.away || "-"}</span>
+                                </div>
+                                <span style={{ fontSize: 13, fontWeight: "bold", paddingRight: 4, color: "var(--accent)" }}>
+                                  {m.score_away !== null ? m.score_away : "-"}
+                                </span>
                               </div>
                             </div>
-                            <div className="comparison-fixture-row">
-                              <div className="comparison-team-side">
-                                <span className="team-name">{match.id <= 72 ? match.team_home : (pResS?.home || pResM?.home || match.team_home)}</span>
-                                <span className="flag-emoji large">{gf(match.id <= 72 ? match.team_home : (pResS?.home || pResM?.home || match.team_home))}</span>
+                            {isTie && (
+                              <div className="penalty-winner-text" style={{ fontSize: "11px", color: "var(--green)", marginTop: "4px", textAlign: "center", fontWeight: "bold" }}>
+                                🏆 Pasa: {m.winner}
                               </div>
-                              <div className="comparison-vs-badge">VS</div>
-                              <div className="comparison-team-side text-left">
-                                <span className="flag-emoji large">{gf(match.id <= 72 ? match.team_away : (pResS?.away || pResM?.away || match.team_away))}</span>
-                                <span className="team-name">{match.id <= 72 ? match.team_away : (pResS?.away || pResM?.away || match.team_away)}</span>
-                              </div>
-                            </div>
-                            <div className="comparison-predictions-grid">
-                              <div className="comparison-user-prediction">
-                                <div className="comparison-user-name">{selectedPart.name}</div>
-                                <div className="comparison-score text-bebas" style={{ color: "var(--accent)" }}>{scoreS}</div>
-                              </div>
-                              <div className="comparison-user-prediction my-prediction-column">
-                                <div className="comparison-user-name">Tú</div>
-                                <div className="comparison-score text-bebas" style={{ color: hasMyPred ? "var(--green)" : "var(--accent)" }}>{scoreM}</div>
+                            )}
+                          </div>
+                        );
+                      };
+                      
+                      const renderPartTreeView = () => {
+                        const leftR32 = [73, 75, 74, 77, 83, 84, 81, 82];
+                        const leftR16 = [90, 89, 93, 94];
+                        const leftQF  = [97, 98];
+                        const leftSF  = [101];
+
+                        const rightR32 = [76, 78, 79, 80, 86, 88, 85, 87];
+                        const rightR16 = [91, 92, 95, 96];
+                        const rightQF  = [99, 100];
+                        const rightSF  = [102];
+
+                        return (
+                          <div className="tree-mode-wrapper">
+                            <div className="bracket-viewport">
+                              <div className="bracket-container">
+                                <div className="bracket-col col-r32">
+                                  <div className="bracket-col-title">R32 (Izq)</div>
+                                  <div className="bracket-col-matches">
+                                    {leftR32.map(id => renderPartMatchCardCompact(id))}
+                                  </div>
+                                </div>
+
+                                <div className="bracket-col col-r16">
+                                  <div className="bracket-col-title">Octavos (Izq)</div>
+                                  <div className="bracket-col-matches">
+                                    {leftR16.map(id => renderPartMatchCardCompact(id))}
+                                  </div>
+                                </div>
+
+                                <div className="bracket-col col-qf">
+                                  <div className="bracket-col-title">Cuartos (Izq)</div>
+                                  <div className="bracket-col-matches">
+                                    {leftQF.map(id => renderPartMatchCardCompact(id))}
+                                  </div>
+                                </div>
+
+                                <div className="bracket-col col-sf">
+                                  <div className="bracket-col-title">Semis (Izq)</div>
+                                  <div className="bracket-col-matches">
+                                    {leftSF.map(id => renderPartMatchCardCompact(id))}
+                                  </div>
+                                </div>
+
+                                <div className="bracket-col col-finals">
+                                  <div className="bracket-col-title">Finales</div>
+                                  <div className="bracket-col-matches finals-grid">
+                                    <div className="finals-group main-final-grid">
+                                      <div className="finals-title gold-text">🏆 FINAL</div>
+                                      {renderPartMatchCardCompact(104)}
+                                    </div>
+                                    <div className="finals-group third-place-grid">
+                                      <div className="finals-title text-dim">🥉 TERCER PUESTO</div>
+                                      {renderPartMatchCardCompact(103)}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="bracket-col col-sf">
+                                  <div className="bracket-col-title">Semis (Der)</div>
+                                  <div className="bracket-col-matches">
+                                    {rightSF.map(id => renderPartMatchCardCompact(id))}
+                                  </div>
+                                </div>
+
+                                <div className="bracket-col col-qf">
+                                  <div className="bracket-col-title">Cuartos (Der)</div>
+                                  <div className="bracket-col-matches">
+                                    {rightQF.map(id => renderPartMatchCardCompact(id))}
+                                  </div>
+                                </div>
+
+                                <div className="bracket-col col-r16">
+                                  <div className="bracket-col-title">Octavos (Der)</div>
+                                  <div className="bracket-col-matches">
+                                    {rightR16.map(id => renderPartMatchCardCompact(id))}
+                                  </div>
+                                </div>
+
+                                <div className="bracket-col col-r32">
+                                  <div className="bracket-col-title">R32 (Der)</div>
+                                  <div className="bracket-col-matches">
+                                    {rightR32.map(id => renderPartMatchCardCompact(id))}
+                                  </div>
+                                </div>
                               </div>
                             </div>
                           </div>
                         );
-                      }
-
-                      // STANDARD VIEW RENDERING
-                      const hasPartPred = pResS && pResS.score_home !== null;
-                      if(!hasPartPred) return(
-                        <div key={match.id} className={`match-card ${match.is_live ? "match-card-live" : "match-card-finished opacity-60"}`}>
-                          <div className="match-card-header">
-                            <span className="match-meta">
-                              Grupo {match.group_name} · #{match.match_number}
-                              {match.is_live && <span className="live-minute-badge"> {match.time_elapsed}'</span>}
-                            </span>
-                            {match.is_live ? (
-                              <span className="badge badge-live">● EN VIVO</span>
-                            ) : (
-                              <span className="badge badge-neutral">Sin predicción</span>
-                            )}
-                          </div>
-                          <div className="match-fixture-row">
-                            <div className="team-home">
-                              <span className="team-name" style={{color:"var(--text-dim)"}}>{match.team_home}</span>
-                              <span className="flag-emoji large" style={{opacity:0.5}}>{gf(match.team_home)}</span>
-                            </div>
-                            <div className="score-inputs-container">
-                              <div className="locked-prediction text-bebas" style={{color:"var(--text-muted)"}}>- : -</div>
-                            </div>
-                            <div className="team-away">
-                              <span className="flag-emoji large" style={{opacity:0.5}}>{gf(match.team_away)}</span>
-                              <span className="team-name" style={{color:"var(--text-dim)"}}>{match.team_away}</span>
-                            </div>
-                          </div>
-                        </div>
-                      );
+                      };
                       
-                      const finished = match.is_finished;
-                      const isLive = match.is_live;
-                      let pts = null;
-                      let isExact = false;
-                      let isWinner = false;
-                      let wasDemoted = false;
+                      const rounds = [
+                        { name: "Dieciseisavos de Final (R32)", ids: [73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88] },
+                        { name: "Octavos de Final (R16)", ids: [89, 90, 91, 92, 93, 94, 95, 96] },
+                        { name: "Cuartos de Final (QF)", ids: [97, 98, 99, 100] },
+                        { name: "Semifinales (SF)", ids: [101, 102] },
+                        { name: "Tercer Puesto y Final", ids: [103, 104] }
+                      ];
                       
-                      if ((finished || isLive) && pResS && pResS.score_home !== null && pResS.score_away !== null && rRes && rRes.score_home !== null && rRes.score_away !== null) {
-                        pts = getMatchPointsUnified(match.id, selectedPartResolved, realResolved);
-                        
-                        if (match.id <= 72) {
-                          isExact = pts === 5;
-                          isWinner = pts === 3;
-                        } else {
-                          const isWinnerCorrect = (pResS.winner === rRes.winner && rRes.winner !== null);
-                          if (isWinnerCorrect) {
-                            const isMatchupCorrect = (pResS.home === rRes.home && pResS.away === rRes.away) || (pResS.home === rRes.away && pResS.away === rRes.home);
-                            if (isMatchupCorrect) {
-                              if (pResS.home === rRes.home) {
-                                isExact = (pResS.score_home === rRes.score_home && pResS.score_away === rRes.score_away);
-                              } else {
-                                isExact = (pResS.score_home === rRes.score_away && pResS.score_away === rRes.score_home);
-                              }
-                            }
-                            
-                            let hasAncestorError = false;
-                            if (isExact) {
-                              const ancestors = getAncestors(match.id);
-                              for (const aId of ancestors) {
-                                const pAnc = selectedPartResolved[aId];
-                                const rAnc = realResolved[aId];
-                                if (!pAnc || !rAnc) { hasAncestorError = true; break; }
-                                const isAncMatchupCorrect = (pAnc.home === rAnc.home && pAnc.away === rAnc.away) || (pAnc.home === rAnc.away && pAnc.away === rAnc.home);
-                                if (!isAncMatchupCorrect) { hasAncestorError = true; break; }
-                              }
-                            }
-                            
-                            if (isExact && hasAncestorError) {
-                              isExact = false;
-                              isWinner = true;
-                              wasDemoted = true;
-                            } else {
-                              isWinner = !isExact;
-                            }
-                          }
-                        }
-                      }
-                      
-                      let matchCardClass = "match-card";
-                      if(isLive){
-                        matchCardClass += " match-card-live";
-                      } else if(finished){
-                        if(isExact) matchCardClass += " match-card-exact";
-                        else if(isWinner) matchCardClass += " match-card-winner";
-                        else matchCardClass += " match-card-incorrect";
-                      } else {
-                        matchCardClass += " match-card-locked";
-                      }
-
-                      let liveGlowClass = "";
-                      if (isLive && pResS) {
-                        if (isExact) liveGlowClass = "live-glow-exact";
-                        else if (isWinner) liveGlowClass = "live-glow-winner";
-                      }
-
-                      return(
-                        <div key={match.id} className={matchCardClass}>
-                          <div className="match-card-header">
-                            <span className="match-meta">
-                              {match.id <= 72 ? `Grupo ${match.group_name}` : "Eliminación Directa"} · #{match.match_number} · {match.match_date}
-                              {isLive && <span className="live-minute-badge"> {match.time_elapsed}'</span>}
-                            </span>
-                            {isLive && <span className="badge badge-live">● EN VIVO</span>}
-                            {finished&&pts!==null&&<span className={`badge ${isExact?'badge-success':isWinner?'badge-info':'badge-danger'} badge-pts-earned`}>
-                              {isExact ? `🎯 +${pts}` : isWinner ? (wasDemoted ? `✓ +${pts} (⚠️ Rival diferente)` : `✓ +${pts}`) : "✗ 0"}
-                            </span>}
-                            {isLive&&pts!==null&&pts>0&&<span className={`badge ${isExact?'badge-success-glow':'badge-info-glow'} badge-pts-earned`}>{isExact?`🎯 +${pts} (Parcial)`:`✓ +${pts} (Parcial)`}</span>}
-                            {!finished&&!isLive&&<span className="badge badge-success">🔒 Enviado</span>}
-                          </div>
-                          <div className="match-fixture-row">
-                            <div className="team-home">
-                              <span className="team-name">{match.id <= 72 ? match.team_home : pResS.home}</span>
-                              <span className="flag-emoji large">{gf(match.id <= 72 ? match.team_home : pResS.home)}</span>
+                      return (
+                        <div className="list-mode-wrapper fade-in" style={{ marginTop: "16px" }}>
+                          <details style={{ marginBottom: "24px", border: "1px solid var(--border)", borderRadius: "16px", background: "rgba(9, 11, 24, 0.3)" }} className="glass-card" open>
+                            <summary style={{ cursor: "pointer", padding: "8px 12px", fontWeight: "bold", color: "var(--accent)", outline: "none", display: "list-item" }} className="text-bebas">
+                              👁️ DIAGRAMA VISUAL DEL BRACKET DE {selectedPart.name.toUpperCase()}
+                            </summary>
+                            <div style={{ marginTop: "16px" }}>
+                              {renderPartTreeView()}
                             </div>
-                            <div className="score-inputs-container">
-                              <div className={`locked-prediction text-bebas ${liveGlowClass}`}>
-                                <span className="predicted-score">{pResS.score_home}</span>
-                                <span className="score-separator">:</span>
-                                <span className="predicted-score">{pResS.score_away}</span>
+                          </details>
+
+                          {rounds.map(round => (
+                            <div key={round.name} className="bracket-round-section" style={{ marginBottom: "32px" }}>
+                              <h4 className="text-bebas" style={{ fontSize: "20px", color: "var(--accent)", borderBottom: "1px solid var(--border)", paddingBottom: "6px", marginBottom: "16px" }}>
+                                {round.name}
+                              </h4>
+                              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: "16px" }}>
+                                {round.ids.map(id => renderPartMatchCardCompact(id))}
                               </div>
-                              {match.id >= 73 && pResS && pResS.score_home !== null && pResS.score_home === pResS.score_away && (
-                                <div className="penalty-winner-text" style={{ fontSize: "10px", color: "var(--accent)", marginTop: "4px", textAlign: "center" }}>
-                                  Pasa: {pResS.winner}
-                                </div>
-                              )}
                             </div>
-                            <div className="team-away">
-                              <span className="flag-emoji large">{gf(match.id <= 72 ? match.team_away : pResS.away)}</span>
-                              <span className="team-name">{match.id <= 72 ? match.team_away : pResS.away}</span>
-                            </div>
-                          </div>
-                          {(finished || isLive) && <div className="real-score-row">Resultado {isLive ? "parcial" : "real"}: <span className="real-score-accent text-bebas" style={{color: isLive ? "var(--green)" : "var(--accent)"}}>{rRes ? rRes.score_home : match.score_home} - {rRes ? rRes.score_away : match.score_away}</span></div>}
+                          ))}
                         </div>
                       );
-                    })}
-                  </div>
-                  {!filteredMatches.length&&<div className="no-data">No se encontraron partidos</div>}
+                    })()
+                  )}
                 </div>
               );
             })():(
@@ -2070,16 +2399,18 @@ export default function App() {
           </div>
         )}
 
-        {/* BRACKETS SIMULATOR */}
-        {view==="brackets"&&user.is_admin&&(
+        {/* BRACKETS PREDICTIONS / SIMULATOR */}
+        {view==="predictions"&&(
           <div className="view-brackets fade-in">
             <div className="view-header-row" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "12px" }}>
-              <h3 className="section-title text-bebas" style={{ margin: 0 }}>🌳 SIMULADOR DE BRACKETS</h3>
+              <h3 className="section-title text-bebas" style={{ margin: 0 }}>{hasKnockoutMatches ? "🌳 PREDICCIONES DE BRACKETS" : "🌳 SIMULADOR DE BRACKETS"}</h3>
               <div style={{ display: "flex", gap: "10px" }}>
-                <button onClick={publishKnockoutMatches} disabled={sending} className="btn-success">
-                  {sending ? "Publicando..." : "Publicar Bracket Oficial 🔒"}
-                </button>
-                <button onClick={() => { if(window.confirm("¿Restablecer la simulación?")) { setDrafts({}); } }} className="btn-secondary">
+                {user.is_admin && (
+                  <button onClick={publishKnockoutMatches} disabled={sending} className="btn-success">
+                    {sending ? "Guardando..." : hasKnockoutMatches ? "Actualizar Cruces Oficiales 🔄" : "Publicar Bracket Oficial 🔒"}
+                  </button>
+                )}
+                <button onClick={() => { if(window.confirm("¿Restablecer la simulación/borrador?")) { setDrafts({}); } }} className="btn-secondary">
                   Restablecer Borrador 🗑️
                 </button>
               </div>
@@ -2090,17 +2421,19 @@ export default function App() {
                 <span>💡</span> REGLAS DE PUNTUACIÓN Y CONTINUIDAD
               </h4>
               <ul style={{ margin: 0, paddingLeft: "20px", fontSize: "13px", lineHeight: "1.6", color: "var(--text-dim)" }}>
-                <li><strong>Acertar Ganador:</strong> +3 pts base. <strong>Marcador Exacto:</strong> +2 pts base.</li>
-                <li><strong>Multiplicadores:</strong> Dieciseisavos (x1), Octavos (x2), Cuartos (x3), Semis y 3er puesto (x4), Final (x5).</li>
-                <li><strong>Regla de Continuidad:</strong> Si fallás el rival de un equipo en la ronda anterior (ej. pusiste España pero pasó Inglaterra en la realidad), ya no podés sumar los +2 pts por <em>Marcador Exacto</em> en ese equipo, solo sumarás por <em>Ganador</em> si el equipo avanza en la realidad.</li>
-                <li><strong>Empates (Penales):</strong> Se permite ingresar empates en el marcador. Si lo hacés, aparecerán botones para seleccionar cuál equipo avanza.</li>
+                <li><strong>Fase de Grupos:</strong> Acierto ganador = 3 pts. Acierto empate (no exacto) = 1 pt. Marcador exacto = 6 pts.</li>
+                <li><strong>Eliminatoria (Brackets):</strong> Acierto ganador = +3 pts base. Marcador exacto (con cruce correcto) = +3 pts base (Máx: 6 pts base).</li>
+                <li><strong>Multiplicadores de Llave:</strong> R32 (x1), Octavos (x2), Cuartos (x3), Semis y 3er puesto (x4), Final (x5).</li>
+                <li><strong>Regla de Continuidad:</strong> Si fallás el rival de un equipo en la ronda anterior (ej. pusiste España pero pasó Inglaterra en la realidad), ya no podés sumar los +3 pts de <em>Marcador Exacto</em> en ese equipo, solo sumarás por <em>Ganador</em> si el equipo avanza en la realidad.</li>
+                <li><strong>Empates (Penales):</strong> Si pones empate en el marcador, debes elegir cuál de los dos equipos avanza a la siguiente ronda haciendo clic en los botones de penales.</li>
               </ul>
             </div>
 
             {(() => {
               const hasMatches = matches.some(m => m.id === 73);
+              const isBracketLocked = preds.some(p => p.match_id >= 73);
               const merged = getBracketDraftsMerged();
-              const userBracket = resolvePredictionsWithSource(merged, mergedMatches, hasMatches ? "db" : "pred");
+              const userBracket = resolvePredictionsWithSource(merged, mergedMatches, hasMatches ? "db" : "real");
               const realResolved = resolveRealResults(mergedMatches);
 
               const handleScoreChange = (mid, side, value) => {
@@ -2136,7 +2469,7 @@ export default function App() {
                 
                 const isHomePlaceholder = !m.home || m.home.startsWith("Ganador P") || m.home.startsWith("Perdedor P") || m.home === "";
                 const isAwayPlaceholder = !m.away || m.away.startsWith("Ganador P") || m.away.startsWith("Perdedor P") || m.away === "";
-                const isDisabled = isHomePlaceholder || isAwayPlaceholder || readOnly;
+                const isDisabled = isHomePlaceholder || isAwayPlaceholder || readOnly || isBracketLocked;
                 
                 const draft = drafts[m.id] || {};
                 const dbPred = preds.find(p => p.match_id === m.id);
@@ -2250,7 +2583,13 @@ export default function App() {
                 );
               };
 
-              const saveButton = hasMatches ? (
+              const saveButton = isBracketLocked ? (
+                <div className="glass-card text-center" style={{ margin: "20px 0", border: "1px solid var(--green)", padding: "16px 20px" }}>
+                  <span style={{ fontSize: 14, color: "var(--green)", fontWeight: "700", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}>
+                    <span>🔒</span> TU BRACKET ESTÁ GUARDADO Y BLOQUEADO OFICIALMENTE
+                  </span>
+                </div>
+              ) : hasMatches ? (
                 <div style={{ display: "flex", justifyContent: "center", margin: "24px 0" }}>
                   <button onClick={saveBracketPredictions} disabled={sending} className="btn-primary" style={{ padding: "12px 32px", fontSize: "16px", borderRadius: "14px", fontWeight: "bold", width: "100%", maxWidth: "400px" }}>
                     {sending ? "Guardando..." : "🔒 Guardar Todo el Bracket"}
@@ -2404,6 +2743,202 @@ export default function App() {
           </div>
         )}
 
+        {/* REAL BRACKET VIEW */}
+        {view==="real_bracket"&&(
+          <div className="view-brackets fade-in">
+            <div className="view-header-row" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "12px" }}>
+              <h3 className="section-title text-bebas" style={{ margin: 0 }}>🌳 BRACKET REAL DEL MUNDIAL</h3>
+            </div>
+            
+            <p className="section-subtitle" style={{ marginBottom: "20px" }}>
+              Seguí el avance oficial de la copa. Aquí se muestran los cruces, marcadores y clasificados reales según se van registrando los resultados del torneo.
+            </p>
+
+            {(() => {
+              const hasMatches = matches.some(m => m.id === 73);
+              if (!hasMatches) {
+                return (
+                  <div className="glass-card text-center" style={{ padding: "30px 20px", border: "1px dashed var(--border)" }}>
+                    <div style={{ fontSize: "40px", marginBottom: "12px" }}>⏳</div>
+                    <h4 className="text-bebas" style={{ color: "var(--accent)", margin: "0 0 8px 0" }}>EL BRACKET OFICIAL AÚN NO HA COMENZADO</h4>
+                    <p style={{ color: "var(--text-dim)", fontSize: "14px", margin: 0, lineHeight: "1.5" }}>
+                      Los cruces reales del Round of 32 se habilitarán y mostrarán aquí tan pronto como finalice la fase de grupos y el administrador los publique oficialmente.
+                    </p>
+                  </div>
+                );
+              }
+
+              const realResolved = resolveRealResults(mergedMatches);
+
+              const renderRealMatchCardCompact = (matchId) => {
+                const m = realResolved[matchId];
+                if (!m) return null;
+                const isTie = m.score_home !== null && m.score_away !== null && m.score_home === m.score_away;
+                const isHomeWinner = m.winner === m.home && m.winner !== null;
+                const isAwayWinner = m.winner === m.away && m.winner !== null;
+                
+                return (
+                  <div key={m.id} className={`bracket-match-card ${m.winner ? "has-winner" : ""}`} style={{ minHeight: isTie ? "130px" : "110px", height: "auto" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", height: "14px" }}>
+                      <span className="bracket-match-num">Match #{m.id}</span>
+                      {m.is_finished && <span className="badge badge-success" style={{ fontSize: "8px", padding: "1px 4px" }}>✓ FINAL</span>}
+                    </div>
+                    
+                    <div className="bracket-match-teams">
+                      <div className={`bracket-team-row ${isHomeWinner ? "is-winner" : ""} is-placeholder`}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, minWidth: 0 }}>
+                          <span className="flag-emoji">{m.home ? gf(m.home) : "🏳️"}</span>
+                          <span className="team-name" title={m.home}>{m.home || "-"}</span>
+                        </div>
+                        <span style={{ fontSize: 13, fontWeight: "bold", paddingRight: 4, color: "var(--accent)" }}>
+                          {m.score_home !== null ? m.score_home : "-"}
+                        </span>
+                      </div>
+                      
+                      <div className={`bracket-team-row ${isAwayWinner ? "is-winner" : ""} is-placeholder`}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, minWidth: 0 }}>
+                          <span className="flag-emoji">{m.away ? gf(m.away) : "🏳️"}</span>
+                          <span className="team-name" title={m.away}>{m.away || "-"}</span>
+                        </div>
+                        <span style={{ fontSize: 13, fontWeight: "bold", paddingRight: 4, color: "var(--accent)" }}>
+                          {m.score_away !== null ? m.score_away : "-"}
+                        </span>
+                      </div>
+                    </div>
+                    {isTie && (
+                      <div className="penalty-winner-text" style={{ fontSize: "11px", color: "var(--green)", marginTop: "4px", textAlign: "center", fontWeight: "bold" }}>
+                        🏆 Pasa: {m.winner}
+                      </div>
+                    )}
+                  </div>
+                );
+              };
+
+              const renderRealTreeView = () => {
+                const leftR32 = [73, 75, 74, 77, 83, 84, 81, 82];
+                const leftR16 = [90, 89, 93, 94];
+                const leftQF  = [97, 98];
+                const leftSF  = [101];
+
+                const rightR32 = [76, 78, 79, 80, 86, 88, 85, 87];
+                const rightR16 = [91, 92, 95, 96];
+                const rightQF  = [99, 100];
+                const rightSF  = [102];
+
+                return (
+                  <div className="tree-mode-wrapper">
+                    <div className="bracket-viewport">
+                      <div className="bracket-container">
+                        <div className="bracket-col col-r32">
+                          <div className="bracket-col-title">R32 (Izq)</div>
+                          <div className="bracket-col-matches">
+                            {leftR32.map(id => renderRealMatchCardCompact(id))}
+                          </div>
+                        </div>
+
+                        <div className="bracket-col col-r16">
+                          <div className="bracket-col-title">Octavos (Izq)</div>
+                          <div className="bracket-col-matches">
+                            {leftR16.map(id => renderRealMatchCardCompact(id))}
+                          </div>
+                        </div>
+
+                        <div className="bracket-col col-qf">
+                          <div className="bracket-col-title">Cuartos (Izq)</div>
+                          <div className="bracket-col-matches">
+                            {leftQF.map(id => renderRealMatchCardCompact(id))}
+                          </div>
+                        </div>
+
+                        <div className="bracket-col col-sf">
+                          <div className="bracket-col-title">Semis (Izq)</div>
+                          <div className="bracket-col-matches">
+                            {leftSF.map(id => renderRealMatchCardCompact(id))}
+                          </div>
+                        </div>
+
+                        <div className="bracket-col col-finals">
+                          <div className="bracket-col-title">Finales</div>
+                          <div className="bracket-col-matches finals-grid">
+                            <div className="finals-group main-final-grid">
+                              <div className="finals-title gold-text">🏆 FINAL</div>
+                              {renderRealMatchCardCompact(104)}
+                            </div>
+                            <div className="finals-group third-place-grid">
+                              <div className="finals-title text-dim">🥉 TERCER PUESTO</div>
+                              {renderRealMatchCardCompact(103)}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="bracket-col col-sf">
+                          <div className="bracket-col-title">Semis (Der)</div>
+                          <div className="bracket-col-matches">
+                            {rightSF.map(id => renderRealMatchCardCompact(id))}
+                          </div>
+                        </div>
+
+                        <div className="bracket-col col-qf">
+                          <div className="bracket-col-title">Cuartos (Der)</div>
+                          <div className="bracket-col-matches">
+                            {rightQF.map(id => renderRealMatchCardCompact(id))}
+                          </div>
+                        </div>
+
+                        <div className="bracket-col col-r16">
+                          <div className="bracket-col-title">Octavos (Der)</div>
+                          <div className="bracket-col-matches">
+                            {rightR16.map(id => renderRealMatchCardCompact(id))}
+                          </div>
+                        </div>
+
+                        <div className="bracket-col col-r32">
+                          <div className="bracket-col-title">R32 (Der)</div>
+                          <div className="bracket-col-matches">
+                            {rightR32.map(id => renderRealMatchCardCompact(id))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              };
+
+              const rounds = [
+                { name: "Dieciseisavos de Final (R32)", ids: [73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88] },
+                { name: "Octavos de Final (R16)", ids: [89, 90, 91, 92, 93, 94, 95, 96] },
+                { name: "Cuartos de Final (QF)", ids: [97, 98, 99, 100] },
+                { name: "Semifinales (SF)", ids: [101, 102] },
+                { name: "Tercer Puesto y Final", ids: [103, 104] }
+              ];
+
+              return (
+                <div className="list-mode-wrapper fade-in">
+                  <details style={{ marginBottom: "24px", border: "1px solid var(--border)", borderRadius: "16px", background: "rgba(9, 11, 24, 0.3)" }} className="glass-card" open>
+                    <summary style={{ cursor: "pointer", padding: "8px 12px", fontWeight: "bold", color: "var(--accent)", outline: "none", display: "list-item" }} className="text-bebas">
+                      👁️ DIAGRAMA GRÁFICO REAL DE LA COPA
+                    </summary>
+                    <div style={{ marginTop: "16px" }}>
+                      {renderRealTreeView()}
+                    </div>
+                  </details>
+
+                  {rounds.map(round => (
+                    <div key={round.name} className="bracket-round-section" style={{ marginBottom: "32px" }}>
+                      <h4 className="text-bebas" style={{ fontSize: "20px", color: "var(--accent)", borderBottom: "1px solid var(--border)", paddingBottom: "6px", marginBottom: "16px" }}>
+                        {round.name}
+                      </h4>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: "16px" }}>
+                        {round.ids.map(id => renderRealMatchCardCompact(id))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+          </div>
+        )}
+
         {/* ADMIN */}
         {view==="admin"&&user.is_admin&&(
           <div className="view-admin fade-in">
@@ -2464,7 +2999,7 @@ export default function App() {
                 });
                 
                 return adminFilteredMatches.map(m => (
-                  <AMC key={m.id} m={m} onU={updResult}/>
+                  <AMC key={m.id} m={m} onU={updResult} winner={getRealWinnerTeam(m, matches)}/>
                 ));
               })()}
               {fm.length === 0 && <div className="no-data">No hay partidos en este grupo</div>}
@@ -2492,14 +3027,22 @@ function GF({gs,sel,set}){
   );
 }
 
-function AMC({m,onU}){
+function AMC({m,onU,winner}){
   const [h,sH]=useState("");
   const [a,sA]=useState("");
+  const [penaltyWinner, setPenaltyWinner] = useState(null);
   
   useEffect(() => {
     sH(m.score_home !== null ? String(m.score_home) : "");
     sA(m.score_away !== null ? String(m.score_away) : "");
-  }, [m.score_home, m.score_away]);
+    if (m.score_home !== null && m.score_away !== null && m.score_home === m.score_away) {
+      if (winner === m.team_home) setPenaltyWinner("home");
+      else if (winner === m.team_away) setPenaltyWinner("away");
+      else setPenaltyWinner(null);
+    } else {
+      setPenaltyWinner(null);
+    }
+  }, [m, winner]);
 
   const decH = () => sH(prev => Math.max(0, (parseInt(prev) || 0) - 1).toString());
   const incH = () => sH(prev => ((parseInt(prev) || 0) + 1).toString());
@@ -2508,7 +3051,13 @@ function AMC({m,onU}){
 
   const handleSave = () => {
     if(h!=="" && a!=="") {
-      onU(m.id, h, a);
+      const isTie = parseInt(h) === parseInt(a);
+      if (m.id >= 73 && isTie && !penaltyWinner) {
+        alert("Por favor, selecciona al ganador de penales.");
+        return;
+      }
+      const winTeam = isTie ? (penaltyWinner === "home" ? m.team_home : m.team_away) : (parseInt(h) > parseInt(a) ? m.team_home : m.team_away);
+      onU(m.id, h, a, winTeam);
     }
   };
 
@@ -2523,10 +3072,12 @@ function AMC({m,onU}){
     cardClass += " match-card-exact";
   }
 
+  const isTie = h !== "" && a !== "" && parseInt(h) === parseInt(a);
+
   return(
     <div className={cardClass}>
       <div className="match-card-header">
-        <span className="match-meta">Grupo {m.group_name} · #{m.match_number} · {m.match_date}</span>
+        <span className="match-meta">{m.id <= 72 ? `Grupo ${m.group_name}` : "Eliminación Directa"} · #{m.match_number} · {m.match_date}</span>
         {m.is_finished&&<span className="badge badge-success">✓ FINAL</span>}
       </div>
       <div className="match-fixture-row">
@@ -2572,6 +3123,29 @@ function AMC({m,onU}){
           <span className="team-name">{m.team_away}</span>
         </div>
       </div>
+
+      {m.id >= 73 && isTie && (
+        <div style={{ padding: "0 16px 12px", display: "flex", flexDirection: "column", gap: "8px", alignItems: "center", borderTop: "1px dashed var(--border)", paddingTop: "12px", marginTop: "-4px" }}>
+          <span style={{ fontSize: "11px", color: "var(--accent)", fontWeight: "bold", letterSpacing: "0.5px" }}>🏆 GANADOR REAL DE PENALES:</span>
+          <div style={{ display: "flex", gap: "12px" }}>
+            <button 
+              onClick={() => setPenaltyWinner("home")} 
+              className={`penalty-btn-choice ${penaltyWinner === "home" ? "active" : ""}`}
+              style={{ padding: "6px 16px", borderRadius: "8px", fontSize: "11px", fontWeight: "bold" }}
+            >
+              {m.team_home}
+            </button>
+            <button 
+              onClick={() => setPenaltyWinner("away")} 
+              className={`penalty-btn-choice ${penaltyWinner === "away" ? "active" : ""}`}
+              style={{ padding: "6px 16px", borderRadius: "8px", fontSize: "11px", fontWeight: "bold" }}
+            >
+              {m.team_away}
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="match-card-actions">
         <button onClick={handleSave} className="btn-success btn-sm-action">{m.is_finished?"Actualizar resultado":"Registrar resultado"}</button>
       </div>
