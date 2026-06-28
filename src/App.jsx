@@ -2137,8 +2137,8 @@ export default function App() {
                             pts = getMatchPointsUnified(match.id, selectedPartResolved, realResolved);
                             
                             if (match.id <= 72) {
-                              isExact = pts === 6;
-                              isWinner = pts === 3 || pts === 1;
+                              isExact = pts === 5;
+                              isWinner = pts === 3;
                             } else {
                               const isWinnerCorrect = (pResS.winner === rRes.winner && rRes.winner !== null);
                               if (isWinnerCorrect) {
