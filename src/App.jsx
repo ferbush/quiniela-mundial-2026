@@ -553,6 +553,25 @@ const assignThirds = (bestThirds) => {
       assignment[slots[i].id] = paddedThirds[i];
     }
   }
+
+  // Swap Germany (74) and France (77) opponents if they get Sweden (F) and Paraguay (D) to match official pairings
+  if (assignment[74] && assignment[77]) {
+    if (assignment[74].group === "F" && assignment[77].group === "D") {
+      const temp = assignment[74];
+      assignment[74] = assignment[77];
+      assignment[77] = temp;
+    }
+  }
+
+  // Swap Belgium (82) and Brazil (85) opponents if they get Algeria (J) and Senegal (I) to match official pairings
+  if (assignment[82] && assignment[85]) {
+    if (assignment[82].group === "J" && assignment[85].group === "I") {
+      const temp = assignment[82];
+      assignment[82] = assignment[85];
+      assignment[85] = temp;
+    }
+  }
+
   return assignment;
 };
 function triggerConfetti() {
