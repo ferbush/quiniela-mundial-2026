@@ -1390,12 +1390,6 @@ export default function App() {
   // MAIN
   return(
     <div className="app-main-layout">
-      {/* Marquesina de Emoción - Fase Eliminatoria */}
-      <div className="elimination-marquee">
-        <div className="marquee-content">
-          <span>🔥 ¡FASE DE ELIMINACIÓN DIRECTA ACTIVADA! CADA DUELO ES A MATAR O MORIR · PREPARA TU BRACKET OFICIAL 🏆 ¡QUE COMIENCE LA MAGIA DE LOS BRACKETS! 🔒 GUARDADO DE PRONÓSTICOS DE BRACKETS EN VIVO 🔥 ¡FASE DE ELIMINACIÓN DIRECTA ACTIVADA! CADA DUELO ES A MATAR O MORIR · PREPARA TU BRACKET OFICIAL 🏆 ¡QUE COMIENCE LA MAGIA DE LOS BRACKETS! 🔒 GUARDADO DE PRONÓSTICOS DE BRACKETS EN VIVO</span>
-        </div>
-      </div>
       <div className="ambient-glow-1"></div>
       <div className="ambient-glow-2"></div>
       {/* Header */}
