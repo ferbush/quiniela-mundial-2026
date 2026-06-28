@@ -6,10 +6,32 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const hdrs = { "Content-Type":"application/json", apikey:SUPABASE_ANON_KEY, Authorization:`Bearer ${SUPABASE_ANON_KEY}` };
 
 async function supa(path, opts={}) {
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, { headers:{...hdrs,...opts.headers}, ...opts });
+  const { headers, ...restOpts } = opts;
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, { headers:{...hdrs,...headers}, ...restOpts });
   if(!r.ok) throw new Error(await r.text());
   const t = await r.text(); return t ? JSON.parse(t) : null;
 }
+
+async function supaAllPredictions() {
+  let all = [];
+  let page = 0;
+  const pageSize = 1000;
+  while (true) {
+    const from = page * pageSize;
+    const to = from + pageSize - 1;
+    const r = await supa(`predictions?select=*`, {
+      headers: {
+        Range: `${from}-${to}`
+      }
+    });
+    if (!r || r.length === 0) break;
+    all = all.concat(r);
+    if (r.length < pageSize) break;
+    page++;
+  }
+  return all;
+}
+
 
 const FL = {
   Mexico: "mx",
@@ -1115,10 +1137,11 @@ export default function App() {
 
   const load = useCallback(async () => {
     try {
-      const [m,p,a] = await Promise.all([supa("matches?order=match_number.asc"),supa("participants?order=name.asc"),supa("predictions?select=*")]);
+      const [m,p,a] = await Promise.all([supa("matches?order=match_number.asc"),supa("participants?order=name.asc"),supaAllPredictions()]);
       setMatches(m||[]); setParts(p||[]); setAllPreds(a||[]);
       if(user) setPreds((a||[]).filter(pr=>pr.participant_id===user.id));
     } catch(e){ console.error(e); }
+
     setLoading(false);
   },[user]);
 
