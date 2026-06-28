@@ -1037,7 +1037,7 @@ export default function App() {
         payload.push({
           id: d.id,
           match_number: d.id,
-          group_name: null,
+          group_name: "KO",
           team_home: r32TeamMap[d.h]?.name || `2° ${d.h[1]}`,
           team_away: r32TeamMap[d.a]?.name || (d.a.startsWith("3rd_") ? `3° ${d.a.split("_")[1] || ""}` : `2° ${d.a[1]}`),
           match_date: d.date,
@@ -1052,7 +1052,7 @@ export default function App() {
         payload.push({
           id: d.id,
           match_number: d.id,
-          group_name: null,
+          group_name: "KO",
           team_home: d.h,
           team_away: d.a,
           match_date: d.date,
@@ -1865,7 +1865,7 @@ export default function App() {
                   <div key={m.id} className={cardClass}>
                     <div className="match-card-header">
                       <span className="match-meta">
-                        Grupo {m.group_name} · #{m.match_number} · {m.match_date}
+                        {m.id <= 72 ? `Grupo ${m.group_name}` : "Eliminación Directa"} · #{m.match_number} · {m.match_date}
                         {isLive && <span className="live-minute-badge"> {m.time_elapsed}'</span>}
                       </span>
                       {isLive ? (
@@ -2025,7 +2025,7 @@ export default function App() {
                               <div key={match.id} className={`match-card ${compClass} ${match.is_live ? "match-card-live" : ""}`}>
                                 <div className="match-card-header">
                                   <span className="match-meta">
-                                    Grupo {match.group_name} · #{match.match_number} · {match.match_date}
+                                    {match.id <= 72 ? `Grupo ${match.group_name}` : "Eliminación Directa"} · #{match.match_number} · {match.match_date}
                                     {match.is_live && <span className="live-minute-badge"> {match.time_elapsed}'</span>}
                                   </span>
                                   <div style={{ display: "flex", gap: 6 }}>
@@ -2064,7 +2064,7 @@ export default function App() {
                             <div key={match.id} className={`match-card ${match.is_live ? "match-card-live" : "match-card-finished opacity-60"}`}>
                               <div className="match-card-header">
                                 <span className="match-meta">
-                                  Grupo {match.group_name} · #{match.match_number}
+                                  {match.id <= 72 ? `Grupo ${match.group_name}` : "Eliminación Directa"} · #{match.match_number}
                                   {match.is_live && <span className="live-minute-badge"> {match.time_elapsed}'</span>}
                                 </span>
                                 {match.is_live ? (
