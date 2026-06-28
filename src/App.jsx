@@ -1037,7 +1037,7 @@ export default function App() {
         payload.push({
           id: d.id,
           match_number: d.id,
-          group_name: "KO",
+          group_name: "X",
           team_home: r32TeamMap[d.h]?.name || `2° ${d.h[1]}`,
           team_away: r32TeamMap[d.a]?.name || (d.a.startsWith("3rd_") ? `3° ${d.a.split("_")[1] || ""}` : `2° ${d.a[1]}`),
           match_date: d.date,
@@ -1052,7 +1052,7 @@ export default function App() {
         payload.push({
           id: d.id,
           match_number: d.id,
-          group_name: "KO",
+          group_name: "X",
           team_home: d.h,
           team_away: d.a,
           match_date: d.date,
