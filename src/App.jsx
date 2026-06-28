@@ -381,21 +381,31 @@ function getMatchPointsUnified(matchId, predResolved, realResolved) {
     return 0;
   }
   if (matchId <= 72) {
-    if (p.score_home === r.score_home && p.score_away === r.score_away) return 6;
+    if (p.score_home === r.score_home && p.score_away === r.score_away) return 5;
     const pSide = p.score_home > p.score_away ? "H" : (p.score_home < p.score_away ? "A" : "D");
     const rSide = r.score_home > r.score_away ? "H" : (r.score_home < r.score_away ? "A" : "D");
     if (pSide === rSide) {
-      if (pSide === "D") return 1;
       return 3;
     }
     return 0;
   } else {
     const isWinnerCorrect = (p.winner === r.winner && r.winner !== null);
-    if (!isWinnerCorrect) return 0;
     
-    let basePoints = 3;
+    let basePoints = 0;
+    if (isWinnerCorrect) {
+      basePoints += 3;
+    }
+
     const isMatchupCorrect = (p.home === r.home && p.away === r.away) || (p.home === r.away && p.away === r.home);
     if (isMatchupCorrect) {
+      // 1. Guess draw point (+1 pt)
+      const isRealDraw = (r.score_home === r.score_away);
+      const isPredDraw = (p.score_home === p.score_away);
+      if (isRealDraw && isPredDraw) {
+        basePoints += 1;
+      }
+
+      // 2. Guess exact score (+2 pts)
       let isScoreExact = false;
       if (p.home === r.home) {
         isScoreExact = (p.score_home === r.score_home && p.score_away === r.score_away);
@@ -413,10 +423,13 @@ function getMatchPointsUnified(matchId, predResolved, realResolved) {
           if (!isAncMatchupCorrect) { hasAncestorError = true; break; }
         }
         if (!hasAncestorError) {
-          basePoints += 3; // 6 base points max
+          basePoints += 2;
         }
       }
     }
+    
+    if (basePoints === 0) return 0;
+
     let mult = 1;
     if (matchId >= 73 && matchId <= 88) mult = 1;
     else if (matchId >= 89 && matchId <= 96) mult = 2;
@@ -442,36 +455,41 @@ function getParticipantStats(participantId, allPreds, matchesList) {
       const r = realResolved[m.id];
       if (p && r && p.score_home !== null && p.score_away !== null) {
         if (m.id <= 72) {
-          if (pPoints === 6) ex++;
-          else if (pPoints === 3 || pPoints === 1) ac++;
+          if (pPoints === 5) ex++;
+          else if (pPoints === 3) ac++;
         } else {
           const isWinnerCorrect = (p.winner === r.winner && r.winner !== null);
-          if (isWinnerCorrect) {
-            const isMatchupCorrect = (p.home === r.home && p.away === r.away) || (p.home === r.away && p.away === r.home);
-            let isScoreExact = false;
-            if (isMatchupCorrect) {
-              if (p.home === r.home) {
-                isScoreExact = (p.score_home === r.score_home && p.score_away === r.score_away);
-              } else {
-                isScoreExact = (p.score_home === r.score_away && p.score_away === r.score_home);
-              }
+          const isMatchupCorrect = (p.home === r.home && p.away === r.away) || (p.home === r.away && p.away === r.home);
+          let isScoreExact = false;
+          let isDrawCorrect = false;
+
+          if (isMatchupCorrect) {
+            const isRealDraw = (r.score_home === r.score_away);
+            const isPredDraw = (p.score_home === p.score_away);
+            if (isRealDraw && isPredDraw) {
+              isDrawCorrect = true;
             }
-            let hasAncestorError = false;
-            if (isScoreExact) {
-              const ancestors = getAncestors(m.id);
-              for (const aId of ancestors) {
-                const pAnc = predResolved[aId];
-                const rAnc = realResolved[aId];
-                if (!pAnc || !rAnc) { hasAncestorError = true; break; }
-                const isAncMatchupCorrect = (pAnc.home === rAnc.home && pAnc.away === rAnc.away) || (pAnc.home === rAnc.away && pAnc.away === rAnc.home);
-                if (!isAncMatchupCorrect) { hasAncestorError = true; break; }
-              }
-            }
-            if (isScoreExact && !hasAncestorError) {
-              ex++;
+            if (p.home === r.home) {
+              isScoreExact = (p.score_home === r.score_home && p.score_away === r.score_away);
             } else {
-              ac++;
+              isScoreExact = (p.score_home === r.score_away && p.score_away === r.score_home);
             }
+          }
+          let hasAncestorError = false;
+          if (isScoreExact) {
+            const ancestors = getAncestors(m.id);
+            for (const aId of ancestors) {
+              const pAnc = predResolved[aId];
+              const rAnc = realResolved[aId];
+              if (!pAnc || !rAnc) { hasAncestorError = true; break; }
+              const isAncMatchupCorrect = (pAnc.home === rAnc.home && pAnc.away === rAnc.away) || (pAnc.home === rAnc.away && pAnc.away === rAnc.home);
+              if (!isAncMatchupCorrect) { hasAncestorError = true; break; }
+            }
+          }
+          if (isScoreExact && !hasAncestorError) {
+            ex++;
+          } else if (isWinnerCorrect || isDrawCorrect) {
+            ac++;
           }
         }
       }
