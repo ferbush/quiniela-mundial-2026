@@ -1,64 +1,64 @@
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
 
 :root {
-  /* Modern Cozy / Earthy Autumn Sand Palette */
-  --bg: #120e0c;
-  --bg-gradient: radial-gradient(circle at 50% 0%, #2b201a 0%, #120e0c 100%);
-  --grid-color: rgba(212, 163, 115, 0.005);
+  /* Minimalist Slate & Indigo Premium Palette */
+  --bg: #090b11;
+  --bg-gradient: radial-gradient(circle at 50% 0%, #161c2d 0%, #090b11 100%);
+  --grid-color: rgba(99, 102, 241, 0.005);
   
-  --surface: rgba(33, 26, 22, 0.75);
-  --surface-solid: #211a16;
-  --card-bg: rgba(43, 34, 29, 0.55);
-  --card-bg-hover: rgba(56, 45, 39, 0.75);
-  --border: rgba(212, 163, 115, 0.12);
-  --border-hover: rgba(212, 163, 115, 0.3);
-  --border-focus: #d4a373;
+  --surface: rgba(17, 24, 39, 0.7);
+  --surface-solid: #0f172a;
+  --card-bg: rgba(30, 41, 59, 0.45);
+  --card-bg-hover: rgba(30, 41, 59, 0.65);
+  --border: rgba(255, 255, 255, 0.08);
+  --border-hover: rgba(99, 102, 241, 0.35);
+  --border-focus: #6366f1;
   
-  /* Cozy Modern Accents & States */
-  --accent: #d4a373;
-  --accent-rgb: 212, 163, 115;
-  --accent-gradient: linear-gradient(135deg, #d4a373 0%, #faedcd 100%);
-  --accent-dark: #b07d4c;
+  /* Accents & States */
+  --accent: #6366f1; /* Electric Indigo */
+  --accent-rgb: 99, 102, 241;
+  --accent-gradient: linear-gradient(135deg, #6366f1 0%, #818cf8 100%);
+  --accent-dark: #4f46e5;
   
-  --pink: #e07a5f;
-  --pink-rgb: 224, 122, 95;
-  --pink-gradient: linear-gradient(135deg, #f4a261 0%, #e07a5f 100%);
+  --pink: #ec4899; /* Modern Rose/Pink */
+  --pink-rgb: 236, 72, 153;
+  --pink-gradient: linear-gradient(135deg, #f472b6 0%, #ec4899 100%);
   
-  --green: #81b29a;
-  --green-rgb: 129, 178, 154;
-  --green-gradient: linear-gradient(135deg, #a3b18a 0%, #81b29a 100%);
+  --green: #10b981; /* Mint Emerald Success */
+  --green-rgb: 16, 185, 129;
+  --green-gradient: linear-gradient(135deg, #34d399 0%, #10b981 100%);
   
-  --red: #e63946;
-  --red-rgb: 230, 57, 70;
-  --red-gradient: linear-gradient(135deg, #f07167 0%, #e63946 100%);
+  --red: #ef4444; /* Modern Crimson Red */
+  --red-rgb: 239, 68, 68;
+  --red-gradient: linear-gradient(135deg, #f87171 0%, #ef4444 100%);
   
-  --blue: #457b9d;
-  --blue-rgb: 69, 123, 157;
-  --blue-gradient: linear-gradient(135deg, #a8dadc 0%, #457b9d 100%);
+  --blue: #3b82f6; /* Slate Blue */
+  --blue-rgb: 59, 130, 246;
+  --blue-gradient: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
   
-  --text: #f4f1de;
-  --text-dim: #dfdbcf;
-  --text-muted: #7a766c;
+  --text: #f8fafc; /* Crisp Cool White */
+  --text-dim: #94a3b8; /* Cool Grey */
+  --text-muted: #475569;
   
   /* Metallic Medals */
-  --gold: #f4a261;
-  --gold-gradient: linear-gradient(135deg, #f4a261 0%, #e9c46a 100%);
+  --gold: #f59e0b;
+  --gold-gradient: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
   --silver: #cbd5e1;
   --silver-gradient: linear-gradient(135deg, #f1f5f9 0%, #94a3b8 100%);
-  --bronze: #e07a5f;
-  --bronze-gradient: linear-gradient(135deg, #f4a261 0%, #e07a5f 100%);
+  --bronze: #d97706;
+  --bronze-gradient: linear-gradient(135deg, #fb923c 0%, #d97706 100%);
   
   /* Typography & Shadows */
-  --font-display: 'Bebas Neue', system-ui, sans-serif;
+  --font-display: 'Outfit', system-ui, sans-serif;
   --font-body: 'Plus Jakarta Sans', system-ui, sans-serif;
   
-  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.25);
-  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.35);
-  --shadow-lg: 0 20px 48px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.02);
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 20px 48px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.03);
   
-  --glow-cyan: 0 0 15px rgba(212, 163, 115, 0.12);
-  --glow-pink: 0 0 15px rgba(224, 122, 95, 0.12);
-  --glow-green: 0 0 15px rgba(129, 178, 154, 0.12);
+  --glow-cyan: 0 0 15px rgba(99, 102, 241, 0.12);
+  --glow-pink: 0 0 15px rgba(236, 72, 153, 0.12);
+  --glow-green: 0 0 15px rgba(16, 185, 129, 0.12);
 }
 
 /* --- Base Setup --- */
@@ -144,7 +144,7 @@ body {
   width: 650px;
   height: 650px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(212, 163, 115, 0.07) 0%, rgba(0, 0, 0, 0) 70%);
+  background: radial-gradient(circle, rgba(99, 102, 241, 0.08) 0%, rgba(0, 0, 0, 0) 70%);
   z-index: -10;
   pointer-events: none;
   filter: blur(90px);
@@ -157,7 +157,7 @@ body {
   width: 600px;
   height: 600px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(129, 178, 154, 0.05) 0%, rgba(0, 0, 0, 0) 70%);
+  background: radial-gradient(circle, rgba(236, 72, 153, 0.05) 0%, rgba(0, 0, 0, 0) 70%);
   z-index: -10;
   pointer-events: none;
   filter: blur(80px);
@@ -583,7 +583,7 @@ body {
   color: var(--text);
   border-bottom-color: transparent;
   text-shadow: none;
-  background: rgba(212, 163, 115, 0.14);
+  background: rgba(var(--accent-rgb), 0.15);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 .nav-btn:hover:not(.active) {
@@ -931,7 +931,7 @@ body {
 .match-card {
   border-radius: 24px;
   padding: 24px 28px;
-  background: linear-gradient(135deg, rgba(43, 34, 29, 0.5) 0%, rgba(20, 16, 14, 0.75) 100%);
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.4) 0%, rgba(15, 23, 42, 0.75) 100%);
   border: 1px solid var(--border);
   transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   box-shadow: var(--shadow-md);
@@ -955,7 +955,7 @@ body {
 }
 
 .match-card-finished {
-  background: rgba(28, 21, 18, 0.35);
+  background: rgba(15, 23, 42, 0.35);
   border-color: var(--border);
   opacity: 0.85;
 }
@@ -1276,7 +1276,7 @@ body {
 }
 .custom-table th {
   padding: 14px 18px;
-  background: rgba(20, 16, 14, 0.8);
+  background: rgba(15, 23, 42, 0.8);
   color: var(--text-dim);
   font-size: 11px;
   font-weight: 800;
@@ -1746,8 +1746,8 @@ body {
 }
 
 .bracket-match-card {
-  background: linear-gradient(135deg, rgba(43, 34, 29, 0.75) 0%, rgba(20, 16, 14, 0.9) 100%);
-  border: 1px solid rgba(212, 163, 115, 0.18);
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.6) 0%, rgba(15, 23, 42, 0.85) 100%);
+  border: 1px solid rgba(99, 102, 241, 0.18);
   border-radius: 18px;
   padding: 12px 16px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
@@ -1763,13 +1763,13 @@ body {
 }
 
 .bracket-match-card:hover {
-  border-color: rgba(212, 163, 115, 0.5);
-  box-shadow: 0 8px 30px rgba(212, 163, 115, 0.12);
+  border-color: rgba(99, 102, 241, 0.5);
+  box-shadow: 0 8px 30px rgba(99, 102, 241, 0.12);
   transform: translateY(-2px);
 }
 
 .bracket-match-card.has-winner {
-  border-color: rgba(212, 163, 115, 0.3);
+  border-color: rgba(99, 102, 241, 0.3);
 }
 
 .bracket-match-card.has-winner:hover {
@@ -1798,21 +1798,21 @@ body {
   gap: 8px;
   padding: 6px 10px;
   border-radius: 8px;
-  background: rgba(20, 16, 14, 0.6);
+  background: rgba(15, 23, 42, 0.6);
   cursor: pointer;
   transition: all 0.2s ease-in-out;
   border: 1px solid rgba(255, 255, 255, 0.02);
 }
 
 .bracket-team-row:hover:not(.is-placeholder) {
-  background: rgba(212, 163, 115, 0.08);
-  border-color: rgba(212, 163, 115, 0.25);
+  background: rgba(99, 102, 241, 0.08);
+  border-color: rgba(99, 102, 241, 0.25);
   transform: translateX(4px);
 }
 
 .bracket-team-row.is-winner {
-  background: linear-gradient(90deg, rgba(212, 163, 115, 0.15) 0%, rgba(20, 16, 14, 0.7) 100%);
-  border-color: rgba(212, 163, 115, 0.3);
+  background: linear-gradient(90deg, rgba(99, 102, 241, 0.15) 0%, rgba(15, 23, 42, 0.7) 100%);
+  border-color: rgba(99, 102, 241, 0.3);
 }
 
 .bracket-team-row.is-winner .team-name {
