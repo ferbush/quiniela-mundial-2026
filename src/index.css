@@ -542,9 +542,14 @@ body {
   overflow-x: auto;
   max-width: 840px;
   margin: 0 auto 12px;
+  scrollbar-width: none; /* Hide scrollbar on Firefox */
+}
+.nav-bar::-webkit-scrollbar {
+  display: none; /* Hide scrollbar on Chrome, Safari, and Opera */
 }
 .nav-inner {
-  width: 100%;
+  width: max-content;
+  min-width: 100%;
 }
 .nav-container {
   display: flex;
