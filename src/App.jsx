@@ -2562,7 +2562,7 @@ export default function App() {
                 }
                 
                 return (
-                  <div key={m.id} className={`bracket-match-card ${m.winner ? "has-winner" : ""} ${isDisabled && !readOnly ? "is-disabled" : ""}`} style={{ minHeight: isTie ? "170px" : "110px", height: "auto" }}>
+                  <div key={m.id} className={`bracket-match-card ${m.winner ? "has-winner" : ""} ${isDisabled && !readOnly ? "is-disabled" : ""}`} style={{ minHeight: isTie ? (readOnly || isDisabled ? "130px" : "170px") : "110px", height: "auto" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", height: "14px" }}>
                       <span className="bracket-match-num">Match #{m.id}</span>
                       {hasAncestorError && <span className="badge badge-warning" style={{ fontSize: "8.5px", padding: "1px 4px" }} title="Rival diferente en ronda previa. No sumará exacto.">⚠️ Rival diff</span>}
@@ -2605,32 +2605,32 @@ export default function App() {
                     </div>
                     
                     {isTie && (
-                      readOnly ? (
-                        <div className="penalty-winner-text" style={{ fontSize: "11px", color: "var(--green)", marginTop: "8px", textAlign: "center", fontWeight: "bold" }}>
-                          🏆 Pasa: {m.winner}
-                        </div>
-                      ) : (
-                        !isDisabled && (
-                          <div className="penalty-tiebreaker-inline">
-                            <div className="penalty-label">⚡ Empate - Clasifica:</div>
-                            <div className="penalty-buttons-container">
-                              <button 
-                                type="button"
-                                onClick={() => handleSelectPenaltyWinner(m.id, "home")} 
-                                className={`penalty-btn-choice ${penaltyWinner === "home" ? "active" : ""}`}
-                              >
-                                🏆 Avanza {m.home}
-                              </button>
-                              <button 
-                                type="button"
-                                onClick={() => handleSelectPenaltyWinner(m.id, "away")} 
-                                className={`penalty-btn-choice ${penaltyWinner === "away" ? "active" : ""}`}
-                              >
-                                🏆 Avanza {m.away}
-                              </button>
-                            </div>
+                      (readOnly || isDisabled) ? (
+                        (penaltyWinner || m.winner) ? (
+                          <div className="penalty-winner-text" style={{ fontSize: "11px", color: "var(--green)", marginTop: "8px", textAlign: "center", fontWeight: "bold" }}>
+                            🏆 Pasa: {penaltyWinner === "home" ? m.home : penaltyWinner === "away" ? m.away : m.winner}
                           </div>
-                        )
+                        ) : null
+                      ) : (
+                        <div className="penalty-tiebreaker-inline">
+                          <div className="penalty-label">⚡ Empate - Clasifica:</div>
+                          <div className="penalty-buttons-container">
+                            <button 
+                              type="button"
+                              onClick={() => handleSelectPenaltyWinner(m.id, "home")} 
+                              className={`penalty-btn-choice ${penaltyWinner === "home" ? "active" : ""}`}
+                            >
+                              🏆 Avanza {m.home}
+                            </button>
+                            <button 
+                              type="button"
+                              onClick={() => handleSelectPenaltyWinner(m.id, "away")} 
+                              className={`penalty-btn-choice ${penaltyWinner === "away" ? "active" : ""}`}
+                            >
+                              🏆 Avanza {m.away}
+                            </button>
+                          </div>
+                        </div>
                       )
                     )}
                   </div>
