@@ -2607,7 +2607,7 @@ export default function App() {
                     {isTie && (
                       (readOnly || isDisabled) ? (
                         (penaltyWinner || m.winner) ? (
-                          <div className="penalty-winner-text" style={{ fontSize: "11px", color: "var(--green)", marginTop: "8px", textAlign: "center", fontWeight: "bold" }}>
+                          <div className="penalty-winner-text" style={{ fontSize: "11px", color: "var(--green)", marginTop: "5px", textAlign: "center", fontWeight: "bold" }}>
                             🏆 Pasa: {penaltyWinner === "home" ? m.home : penaltyWinner === "away" ? m.away : m.winner}
                           </div>
                         ) : null
