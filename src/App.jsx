@@ -2472,6 +2472,55 @@ export default function App() {
               const userBracket = resolvePredictionsWithSource(merged, mergedMatches, hasMatches ? "db" : "real");
               const realResolved = resolveRealResults(mergedMatches);
 
+              const userRankEntry = ranking.find(p => p.id === user?.id);
+              let userBracketPoints = 0;
+              let userBracketExacts = 0;
+              let userBracketAciertos = 0;
+
+              if (userBracket && realResolved) {
+                for (let id = 73; id <= 104; id++) {
+                  const r = realResolved[id];
+                  if (r && r.is_finished) {
+                    const ptsVal = getMatchPointsUnified(id, userBracket, realResolved);
+                    userBracketPoints += ptsVal;
+                    
+                    const m = userBracket[id];
+                    if (m && m.score_home !== null && m.score_away !== null && r.score_home !== null && r.score_away !== null) {
+                      const isWinnerCorrect = (m.winner === r.winner && r.winner !== null);
+                      if (isWinnerCorrect) {
+                        const isMatchupCorrect = (m.home === r.home && m.away === r.away) || (m.home === r.away && m.away === r.home);
+                        let isExact = false;
+                        if (isMatchupCorrect) {
+                          if (m.home === r.home) {
+                            isExact = (m.score_home === r.score_home && m.score_away === r.score_away);
+                          } else {
+                            isExact = (m.score_home === r.score_away && m.score_away === r.score_home);
+                          }
+                        }
+                        
+                        let hasAncErr = false;
+                        if (isExact) {
+                          const ancestors = getAncestors(id);
+                          for (const aId of ancestors) {
+                            const pAnc = userBracket[aId];
+                            const rAnc = realResolved[aId];
+                            if (!pAnc || !rAnc) { hasAncErr = true; break; }
+                            const isAncMatchupCorrect = (pAnc.home === rAnc.home && pAnc.away === rAnc.away) || (pAnc.home === rAnc.away && pAnc.away === rAnc.home);
+                            if (!isAncMatchupCorrect) { hasAncErr = true; break; }
+                          }
+                        }
+                        
+                        if (isExact && !hasAncErr) {
+                          userBracketExacts++;
+                        } else {
+                          userBracketAciertos++;
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+
               const handleScoreChange = (mid, side, value) => {
                 setDrafts(prev => {
                   const updated = { ...prev };
@@ -2542,12 +2591,51 @@ export default function App() {
                     if (!isAncMatchupCorrect) { hasAncestorError = true; break; }
                   }
                 }
+
+                let pts = 0;
+                let isExact = false;
+                let isWinner = false;
+                let wasDemoted = false;
+
+                if (r && r.is_finished) {
+                  pts = getMatchPointsUnified(m.id, userBracket, realResolved);
+                  if (m.score_home !== null && m.score_away !== null && r.score_home !== null && r.score_away !== null) {
+                    const isWinnerCorrect = (m.winner === r.winner && r.winner !== null);
+                    if (isWinnerCorrect) {
+                      const isMatchupCorrect = (m.home === r.home && m.away === r.away) || (m.home === r.away && m.away === r.home);
+                      if (isMatchupCorrect) {
+                        if (m.home === r.home) {
+                          isExact = (m.score_home === r.score_home && m.score_away === r.score_away);
+                        } else {
+                          isExact = (m.score_home === r.score_away && m.score_away === r.score_home);
+                        }
+                        
+                        if (isExact && hasAncestorError) {
+                          isExact = false;
+                          isWinner = true;
+                          wasDemoted = true;
+                        } else {
+                          isWinner = !isExact;
+                        }
+                      } else {
+                        isWinner = true;
+                      }
+                    }
+                  }
+                }
                 
                 return (
                   <div key={m.id} className={`bracket-match-card ${m.winner ? "has-winner" : ""} ${isDisabled && !readOnly ? "is-disabled" : ""}`} style={{ minHeight: isTie ? (readOnly || isDisabled ? "130px" : "170px") : "110px", height: "auto" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", height: "14px" }}>
                       <span className="bracket-match-num">Match #{m.id}</span>
-                      {hasAncestorError && <span className="badge badge-warning" style={{ fontSize: "8.5px", padding: "1px 4px" }} title="Rival diferente en ronda previa. No sumará exacto.">⚠️ Rival diff</span>}
+                      <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
+                        {hasAncestorError && <span className="badge badge-warning" style={{ fontSize: "8.5px", padding: "1px 4px" }} title="Rival diferente en ronda previa. No sumará exacto.">⚠️ Rival diff</span>}
+                        {r && r.is_finished && (
+                          <span className={`badge ${isExact ? 'badge-success' : isWinner ? 'badge-info' : 'badge-danger'} badge-pts-earned`} style={{ fontSize: "8.5px", padding: "1px 4px" }}>
+                            {isExact ? `🎯 +${pts}` : isWinner ? (wasDemoted ? `✓ +${pts} (⚠️ Rival diff)` : `✓ +${pts}`) : "✗ 0"}
+                          </span>
+                        )}
+                      </div>
                     </div>
                     
                     <div className="bracket-match-teams">
@@ -2739,6 +2827,28 @@ export default function App() {
               
               return (
                 <div className="list-mode-wrapper fade-in">
+                  {userRankEntry && (
+                    <div className="glass-card summary-dashboard" style={{ marginBottom: "24px" }}>
+                      <div className="summary-dashboard-item">
+                        <div className="dashboard-val text-bebas" style={{color:"var(--accent)"}}>{userRankEntry.pts}</div>
+                        <div className="dashboard-lbl">TUS PUNTOS TOTALES</div>
+                        <div style={{ fontSize: "10px", color: "var(--text-dim)", marginTop: "4px" }}>Ranking: #{ranking.findIndex(p => p.id === user.id) + 1} de {ranking.length}</div>
+                      </div>
+                      <div className="summary-dashboard-item">
+                        <div className="dashboard-val text-bebas" style={{color:"var(--green)"}}>{userRankEntry.ex}</div>
+                        <div className="dashboard-lbl">EXACTOS TOTALES</div>
+                      </div>
+                      <div className="summary-dashboard-item">
+                        <div className="dashboard-val text-bebas" style={{color:"var(--blue)"}}>{userRankEntry.ac}</div>
+                        <div className="dashboard-lbl">ACIERTOS TOTALES</div>
+                      </div>
+                      <div className="summary-dashboard-item">
+                        <div className="dashboard-val text-bebas" style={{color:"var(--gold)"}}>{userBracketPoints}</div>
+                        <div className="dashboard-lbl">PUNTOS EN BRACKETS</div>
+                        <div style={{ fontSize: "10px", color: "var(--text-dim)", marginTop: "4px" }}>{userBracketExacts} exactos · {userBracketAciertos} aciertos</div>
+                      </div>
+                    </div>
+                  )}
                   {!hasMatches && (
                     <div className="glass-card" style={{ marginBottom: "24px", border: "1px dashed var(--pink)", padding: "16px 20px" }}>
                       <h4 style={{ margin: "0 0 6px 0", color: "var(--pink)", display: "flex", alignItems: "center", gap: "8px", fontSize: "14px" }} className="text-bebas">
