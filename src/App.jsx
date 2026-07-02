@@ -1484,25 +1484,7 @@ export default function App() {
         {/* RANKING */}
         {view==="ranking"&&(
           <div className="view-ranking fade-in">
-            {groupStageWinner && (
-              <div className="glass-card group-stage-winner-card fade-in" style={{ marginBottom: 24, border: "2px solid var(--gold)", background: "linear-gradient(135deg, rgba(255, 215, 0, 0.08) 0%, rgba(9, 11, 24, 0.7) 100%)", padding: "20px 24px", position: "relative", overflow: "hidden" }}>
-                <div className="winner-glow-effect"></div>
-                <div style={{ display: "flex", alignItems: "center", gap: "16px", flexWrap: "wrap" }}>
-                  <div style={{ fontSize: "40px", animation: "floatLogo 3s infinite ease-in-out" }}>👑</div>
-                  <div>
-                    <h3 className="text-bebas" style={{ margin: 0, fontSize: "20px", color: "var(--gold)", letterSpacing: "1.5px" }}>
-                      {groupStageFinishedCount >= 72 ? "🏆 GANADOR DE FASE DE GRUPOS" : "🏆 GANADOR DE FASE DE GRUPOS (PROVISIONAL)"}
-                    </h3>
-                    <h2 className="text-bebas" style={{ margin: "4px 0 0 0", fontSize: "28px", color: "#fff", textShadow: "0 0 10px rgba(255, 215, 0, 0.3)", letterSpacing: "1px" }}>
-                      {groupStageWinner.name} <span style={{ color: "var(--gold)", fontSize: "20px" }}>({groupStageWinner.pts} PTS)</span>
-                    </h2>
-                    <p style={{ margin: "4px 0 0 0", fontSize: "12px", color: "var(--text-dim)", fontWeight: "500" }}>
-                      {groupStageFinishedCount >= 72 ? "¡Felicidades por dominar la primera etapa de la copa mundial!" : `Calculado en base a ${groupStageFinishedCount} de 72 partidos jugados.`}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
+
 
             <div className="glass-card progress-card">
               <div className="progress-details">

@@ -1,64 +1,64 @@
 @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
 
 :root {
-  /* Cyberpunk / Esports Premium Volcanic Palette */
-  --bg: #030107;
-  --bg-gradient: radial-gradient(circle at 50% 0%, #240a1b 0%, #030107 100%);
-  --grid-color: rgba(255, 85, 0, 0.008);
+  /* Modern Cozy / Earthy Autumn Sand Palette */
+  --bg: #120e0c;
+  --bg-gradient: radial-gradient(circle at 50% 0%, #2b201a 0%, #120e0c 100%);
+  --grid-color: rgba(212, 163, 115, 0.005);
   
-  --surface: rgba(8, 5, 14, 0.75);
-  --surface-solid: #050309;
-  --card-bg: rgba(12, 8, 20, 0.55);
-  --card-bg-hover: rgba(22, 14, 36, 0.75);
-  --border: rgba(255, 85, 0, 0.12);
-  --border-hover: rgba(255, 69, 0, 0.35);
-  --border-focus: #ff4500;
+  --surface: rgba(33, 26, 22, 0.75);
+  --surface-solid: #211a16;
+  --card-bg: rgba(43, 34, 29, 0.55);
+  --card-bg-hover: rgba(56, 45, 39, 0.75);
+  --border: rgba(212, 163, 115, 0.12);
+  --border-hover: rgba(212, 163, 115, 0.3);
+  --border-focus: #d4a373;
   
-  /* Cyber Volcanic Neon Elements */
-  --accent: #ff4500;
-  --accent-rgb: 255, 69, 0;
-  --accent-gradient: linear-gradient(135deg, #ff4500 0%, #ff8c00 100%);
-  --accent-dark: #b33000;
+  /* Cozy Modern Accents & States */
+  --accent: #d4a373;
+  --accent-rgb: 212, 163, 115;
+  --accent-gradient: linear-gradient(135deg, #d4a373 0%, #faedcd 100%);
+  --accent-dark: #b07d4c;
   
-  --pink: #f533ff;
-  --pink-rgb: 245, 51, 255;
-  --pink-gradient: linear-gradient(135deg, #ff6ea7 0%, #f533ff 100%);
+  --pink: #e07a5f;
+  --pink-rgb: 224, 122, 95;
+  --pink-gradient: linear-gradient(135deg, #f4a261 0%, #e07a5f 100%);
   
-  --green: #00ff88;
-  --green-rgb: 0, 255, 136;
-  --green-gradient: linear-gradient(135deg, #00ff88 0%, #00b359 100%);
+  --green: #81b29a;
+  --green-rgb: 129, 178, 154;
+  --green-gradient: linear-gradient(135deg, #a3b18a 0%, #81b29a 100%);
   
-  --red: #ff3366;
-  --red-rgb: 255, 51, 102;
-  --red-gradient: linear-gradient(135deg, #ff3366 0%, #cc0033 100%);
+  --red: #e63946;
+  --red-rgb: 230, 57, 70;
+  --red-gradient: linear-gradient(135deg, #f07167 0%, #e63946 100%);
   
-  --blue: #00aaff;
-  --blue-rgb: 0, 170, 255;
-  --blue-gradient: linear-gradient(135deg, #00aaff 0%, #0055ff 100%);
+  --blue: #457b9d;
+  --blue-rgb: 69, 123, 157;
+  --blue-gradient: linear-gradient(135deg, #a8dadc 0%, #457b9d 100%);
   
-  --text: #f1f5f9;
-  --text-dim: #94a3b8;
-  --text-muted: #334155;
+  --text: #f4f1de;
+  --text-dim: #dfdbcf;
+  --text-muted: #7a766c;
   
   /* Metallic Medals */
-  --gold: #ffe066;
-  --gold-gradient: linear-gradient(135deg, #ffe066 0%, #f59e0b 100%);
+  --gold: #f4a261;
+  --gold-gradient: linear-gradient(135deg, #f4a261 0%, #e9c46a 100%);
   --silver: #cbd5e1;
   --silver-gradient: linear-gradient(135deg, #f1f5f9 0%, #94a3b8 100%);
-  --bronze: #fb923c;
-  --bronze-gradient: linear-gradient(135deg, #fdba74 0%, #c2410c 100%);
+  --bronze: #e07a5f;
+  --bronze-gradient: linear-gradient(135deg, #f4a261 0%, #e07a5f 100%);
   
   /* Typography & Shadows */
   --font-display: 'Bebas Neue', system-ui, sans-serif;
   --font-body: 'Plus Jakarta Sans', system-ui, sans-serif;
   
-  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.4);
-  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.5);
-  --shadow-lg: 0 20px 48px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.25);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 20px 48px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.02);
   
-  --glow-cyan: 0 0 20px rgba(255, 69, 0, 0.25);
-  --glow-pink: 0 0 20px rgba(255, 110, 0, 0.25);
-  --glow-green: 0 0 20px rgba(255, 215, 0, 0.25);
+  --glow-cyan: 0 0 15px rgba(212, 163, 115, 0.12);
+  --glow-pink: 0 0 15px rgba(224, 122, 95, 0.12);
+  --glow-green: 0 0 15px rgba(129, 178, 154, 0.12);
 }
 
 /* --- Base Setup --- */
@@ -90,11 +90,11 @@ body {
   height: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: #020206;
+  background: #120e0c;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(0, 242, 254, 0.15);
-  border: 1px solid #020206;
+  background: rgba(212, 163, 115, 0.2);
+  border: 1px solid #120e0c;
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
@@ -144,7 +144,7 @@ body {
   width: 650px;
   height: 650px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(255, 69, 0, 0.12) 0%, rgba(0, 0, 0, 0) 70%);
+  background: radial-gradient(circle, rgba(212, 163, 115, 0.07) 0%, rgba(0, 0, 0, 0) 70%);
   z-index: -10;
   pointer-events: none;
   filter: blur(90px);
@@ -157,7 +157,7 @@ body {
   width: 600px;
   height: 600px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(130, 0, 255, 0.08) 0%, rgba(0, 0, 0, 0) 70%);
+  background: radial-gradient(circle, rgba(129, 178, 154, 0.05) 0%, rgba(0, 0, 0, 0) 70%);
   z-index: -10;
   pointer-events: none;
   filter: blur(80px);
@@ -1562,16 +1562,16 @@ body {
   box-shadow: var(--shadow-md);
 }
 .alert-danger {
-  background: rgba(255, 51, 102, 0.08);
-  border: 1px solid rgba(255, 51, 102, 0.3);
-  color: #ff3366;
-  text-shadow: 0 0 6px rgba(255, 51, 102, 0.2);
+  background: rgba(var(--red-rgb), 0.08);
+  border: 1px solid rgba(var(--red-rgb), 0.3);
+  color: var(--red);
+  text-shadow: 0 0 6px rgba(var(--red-rgb), 0.2);
 }
 .alert-success {
-  background: rgba(0, 255, 136, 0.08);
-  border: 1px solid rgba(0, 255, 136, 0.3);
-  color: #00ff88;
-  text-shadow: 0 0 6px rgba(0, 255, 136, 0.2);
+  background: rgba(var(--green-rgb), 0.08);
+  border: 1px solid rgba(var(--green-rgb), 0.3);
+  color: var(--green);
+  text-shadow: 0 0 6px rgba(var(--green-rgb), 0.2);
 }
 .alert-icon {
   font-size: 18px;
@@ -1966,16 +1966,16 @@ body {
 }
 
 .penalty-btn-choice.active {
-  background: linear-gradient(135deg, #00ff88 0%, #00b359 100%);
+  background: var(--green-gradient);
   border-color: var(--green);
-  color: #020206;
-  box-shadow: 0 0 10px rgba(0, 255, 136, 0.3);
+  color: #120e0c;
+  box-shadow: 0 0 10px rgba(var(--green-rgb), 0.3);
 }
 
 /* Elimination Direct Marquee Styling */
 .elimination-marquee {
-  background: linear-gradient(90deg, #ff4500, #ff0844, #8200ff);
-  color: #fff;
+  background: linear-gradient(90deg, var(--accent), var(--pink), var(--green));
+  color: #120e0c;
   padding: 8px 0;
   overflow: hidden;
   white-space: nowrap;
@@ -1985,7 +1985,7 @@ body {
   font-size: 13.5px;
   font-weight: 700;
   letter-spacing: 2px;
-  box-shadow: 0 4px 20px rgba(255, 8, 68, 0.4);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.35);
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
