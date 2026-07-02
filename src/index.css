@@ -540,6 +540,8 @@ body {
   border-bottom: none;
   padding: 0 20px;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch; /* Momentum scrolling on iOS */
+  overscroll-behavior-x: contain; /* Prevents swipe navigation history gestures */
   max-width: 840px;
   margin: 0 auto 12px;
   scrollbar-width: none; /* Hide scrollbar on Firefox */
@@ -1267,6 +1269,8 @@ body {
 
 .table-wrapper {
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch; /* Momentum scrolling on iOS */
+  overscroll-behavior-x: contain; /* Prevents swipe navigation history gestures */
   border: none;
 }
 .custom-table {
@@ -1680,6 +1684,8 @@ body {
 .bracket-viewport {
   width: 100%;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch; /* Momentum scrolling on iOS */
+  overscroll-behavior-x: contain; /* Prevents swipe navigation history gestures */
   border: 1px solid var(--border);
   border-radius: 20px;
   background: rgba(3, 4, 8, 0.4);
