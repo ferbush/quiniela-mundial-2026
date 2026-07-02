@@ -539,10 +539,11 @@ body {
   background: transparent;
   border-bottom: none;
   padding: 0 20px;
+  width: 100%; /* Force width constraint inside flex layouts */
+  max-width: 840px; /* Cap width on larger screens */
   overflow-x: auto;
   -webkit-overflow-scrolling: touch; /* Momentum scrolling on iOS */
   overscroll-behavior-x: contain; /* Prevents swipe navigation history gestures */
-  max-width: 840px;
   margin: 0 auto 12px;
   scrollbar-width: none; /* Hide scrollbar on Firefox */
 }
@@ -577,6 +578,7 @@ body {
   font-weight: 600;
   transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   white-space: nowrap;
+  flex-shrink: 0; /* Prevent buttons from squashing on mobile viewports */
   letter-spacing: 0.5px;
   text-transform: none;
   font-family: var(--font-body);
