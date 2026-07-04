@@ -2425,6 +2425,7 @@ export default function App() {
                                 const realAway = match.id <= 72 ? match.team_away : (rRes ? rRes.away : match.team_away);
                                 const realScoreHome = rRes ? rRes.score_home : match.score_home;
                                 const realScoreAway = rRes ? rRes.score_away : match.score_away;
+                                const isRealTie = match.id >= 73 && realScoreHome !== null && realScoreHome === realScoreAway;
                                 const hasDifferentMatchup = match.id >= 73 && rRes && pResS && (pResS.home !== rRes.home || pResS.away !== rRes.away);
                                 
                                 return (
@@ -2441,6 +2442,11 @@ export default function App() {
                                       <span style={{ color: "var(--text)", fontWeight: "bold", fontSize: "13px" }}>{realAway}</span>
                                       <span className="flag-emoji" style={{ fontSize: "14px" }}>{gf(realAway)}</span>
                                     </div>
+                                    {isRealTie && rRes && rRes.winner && (
+                                      <div style={{ fontSize: "11px", color: "var(--green)", fontWeight: "bold", marginTop: "2px" }}>
+                                        🏆 Clasificó: {rRes.winner}
+                                      </div>
+                                    )}
                                     {hasDifferentMatchup && (
                                       <div style={{ fontSize: "11px", color: "var(--pink)", fontWeight: "600", marginTop: "2px", borderTop: "1px dashed rgba(235, 94, 85, 0.2)", width: "100%", paddingTop: "4px", textAlign: "center" }}>
                                         ⚠️ Rival incorrecto en tu bracket ({pResS.home} vs {pResS.away})
