@@ -2410,8 +2410,8 @@ export default function App() {
                                     <span className="predicted-score">{pResS.score_away}</span>
                                   </div>
                                   {match.id >= 73 && pResS && pResS.score_home !== null && pResS.score_home === pResS.score_away && (
-                                    <div className="penalty-winner-text" style={{ fontSize: "10px", color: "var(--accent)", marginTop: "4px", textAlign: "center" }}>
-                                      Pasa: {pResS.winner}
+                                    <div className="penalty-winner-text" style={{ fontSize: "12px", color: "var(--accent)", marginTop: "6px", textAlign: "center", fontWeight: "bold", letterSpacing: "0.5px" }}>
+                                      🏆 Pasa: {pResS.winner}
                                     </div>
                                   )}
                                 </div>

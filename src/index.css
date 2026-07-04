@@ -1093,6 +1093,8 @@ body {
   flex-shrink: 0;
   min-width: 140px;
   display: flex;
+  flex-direction: column;
+  align-items: center;
   justify-content: center;
 }
 .inputs-row {
