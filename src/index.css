@@ -2050,3 +2050,33 @@ body {
   pointer-events: none;
   z-index: 1;
 }
+
+/* Points breakdown in match cards */
+.match-card-breakdown {
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--text-dim);
+  border-top: 1px dashed var(--border);
+  padding-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.match-card-breakdown-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.match-card-breakdown-details {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 2px;
+}
+.match-card-breakdown-formula {
+  color: var(--accent);
+  font-weight: 700;
+  font-family: var(--font-display);
+}

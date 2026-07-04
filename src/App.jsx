@@ -527,6 +527,177 @@ function calcPtsForSinglePrediction(pr, matchObj, allMatches, allPreds) {
   return getMatchPointsUnified(matchObj.id, predResolved, realResolved);
 }
 
+function getMultiplierForMatch(matchId) {
+  if (matchId >= 73 && matchId <= 88) return 1;
+  if (matchId >= 89 && matchId <= 96) return 2;
+  if (matchId >= 97 && matchId <= 100) return 3;
+  if (matchId === 101 || matchId === 102 || matchId === 103) return 4;
+  if (matchId === 104) return 5;
+  return 1; // Grupo
+}
+
+function getMatchPointsBreakdownObject(matchId, predResolved, realResolved) {
+  const p = predResolved[matchId];
+  const r = realResolved[matchId];
+  if (!p || !r || p.score_home === null || p.score_away === null || r.score_home === null || r.score_away === null) {
+    return { total: 0, text: "Sin predicción o partido no finalizado", details: [], isExact: false, isWinner: false, wasDemoted: false };
+  }
+  
+  const mult = getMultiplierForMatch(matchId);
+  
+  if (matchId <= 72) {
+    const isEx = p.score_home === r.score_home && p.score_away === r.score_away;
+    if (isEx) {
+      return {
+        total: 5,
+        text: "5 pts (Marcador exacto)",
+        details: ["5 pts (Marcador exacto)"],
+        isExact: true,
+        isWinner: false,
+        wasDemoted: false
+      };
+    }
+    const pSide = p.score_home > p.score_away ? "H" : (p.score_home < p.score_away ? "A" : "D");
+    const rSide = r.score_home > r.score_away ? "H" : (r.score_home < r.score_away ? "A" : "D");
+    if (pSide === rSide) {
+      return {
+        total: 3,
+        text: "3 pts (Acierto ganador o empate)",
+        details: ["3 pts (Ganador o empate)"],
+        isExact: false,
+        isWinner: true,
+        wasDemoted: false
+      };
+    }
+    return {
+      total: 0,
+      text: "0 pts",
+      details: ["0 pts (Incorrecto)"],
+      isExact: false,
+      isWinner: false,
+      wasDemoted: false
+    };
+  } else {
+    const isWinnerCorrect = (p.winner === r.winner && r.winner !== null);
+    let basePoints = 0;
+    const details = [];
+    
+    if (isWinnerCorrect) {
+      basePoints += 3;
+      details.push("3 pts (Ganador)");
+    }
+    
+    const isMatchupCorrect = (p.home === r.home && p.away === r.away) || (p.home === r.away && p.away === r.home);
+    let isScoreExact = false;
+    let hasAncestorError = false;
+    let isRealDraw = false;
+    let isPredDraw = false;
+    
+    if (isMatchupCorrect) {
+      isRealDraw = (r.score_home === r.score_away);
+      isPredDraw = (p.score_home === p.score_away);
+      if (isRealDraw && isPredDraw) {
+        basePoints += 1;
+        details.push("1 pt (Empate)");
+      }
+      
+      if (p.home === r.home) {
+        isScoreExact = (p.score_home === r.score_home && p.score_away === r.score_away);
+      } else {
+        isScoreExact = (p.score_home === r.away && p.score_away === r.home);
+      }
+      if (isScoreExact) {
+        const ancestors = getAncestors(matchId);
+        for (const aId of ancestors) {
+          const pAnc = predResolved[aId];
+          const rAnc = realResolved[aId];
+          if (!pAnc || !rAnc) { hasAncestorError = true; break; }
+          const isAncMatchupCorrect = (pAnc.home === rAnc.home && pAnc.away === rAnc.away) || (pAnc.home === rAnc.away && pAnc.away === rAnc.home);
+          if (!isAncMatchupCorrect) { hasAncestorError = true; break; }
+        }
+        
+        if (!hasAncestorError) {
+          basePoints += 2;
+          details.push("2 pts (Marcador exacto)");
+        } else {
+          details.push("0 pts (Marcador exacto demotado - rival previo incorrecto)");
+        }
+      }
+    } else {
+      isRealDraw = (r.score_home === r.score_away);
+      isPredDraw = (p.score_home === p.score_away);
+      const isExactNumbers = (p.score_home === r.score_home && p.score_away === r.score_away) || (p.score_home === r.score_away && p.score_away === r.home);
+      if (isExactNumbers) {
+        details.push("0 pts (Marcador exacto anulado - rival incorrecto: " + p.home + " vs " + p.away + " en vez de " + r.home + " vs " + r.away + ")");
+      } else if (isRealDraw && isPredDraw) {
+        details.push("0 pts (Empate anulado - rival incorrecto: " + p.home + " vs " + p.away + " en vez de " + r.home + " vs " + r.away + ")");
+      } else {
+        details.push("0 pts (Rival incorrecto: " + p.home + " vs " + p.away + " en vez de " + r.home + " vs " + r.away + ")");
+      }
+    }
+    
+    const total = basePoints * mult;
+    let text = "";
+    if (basePoints === 0) {
+      text = "0 pts";
+    } else {
+      const baseStr = details.filter(d => d.startsWith("3") || d.startsWith("1") || d.startsWith("2")).map(d => d.split(" ")[0] + " " + d.split(" ")[1]).join(" + ");
+      text = mult > 1 ? `(${baseStr}) * x${mult} = ${total} pts` : `${baseStr} = ${total} pts`;
+    }
+    
+    const isEx = isScoreExact && !hasAncestorError;
+    const isWin = basePoints > 0 && !isEx;
+    
+    return {
+      total,
+      text,
+      details,
+      mult,
+      basePoints,
+      isExact: isEx,
+      isWinner: isWin,
+      wasDemoted: isScoreExact && hasAncestorError
+    };
+  }
+}
+
+function getDetailedPhaseBreakdown(partId, allPreds, mergedMatches, realResolved) {
+  const userPreds = allPreds.filter(pr => pr.participant_id === partId);
+  const predResolved = resolvePredictions(userPreds, mergedMatches);
+  
+  const phases = [
+    { name: "Fase de Grupos", range: [1, 72], mult: 1, exacts: 0, aciertos: 0, pts: 0 },
+    { name: "Dieciseisavos (R32)", range: [73, 88], mult: 1, exacts: 0, aciertos: 0, pts: 0 },
+    { name: "Octavos (R16)", range: [89, 96], mult: 2, exacts: 0, aciertos: 0, pts: 0 },
+    { name: "Cuartos de Final", range: [97, 100], mult: 3, exacts: 0, aciertos: 0, pts: 0 },
+    { name: "Semifinales", range: [101, 102], mult: 4, exacts: 0, aciertos: 0, pts: 0 },
+    { name: "Tercer Lugar", range: [103, 103], mult: 4, exacts: 0, aciertos: 0, pts: 0 },
+    { name: "Final", range: [104, 104], mult: 5, exacts: 0, aciertos: 0, pts: 0 }
+  ];
+
+  mergedMatches.forEach(m => {
+    if (m.is_finished) {
+      const matchId = m.id;
+      const phase = phases.find(p => matchId >= p.range[0] && matchId <= p.range[1]);
+      if (phase) {
+        const pPoints = getMatchPointsUnified(matchId, predResolved, realResolved);
+        phase.pts += pPoints;
+        
+        if (pPoints > 0) {
+          const base = pPoints / phase.mult;
+          if (base === 5 || base === 6) {
+            phase.exacts++;
+          } else if (base === 3 || base === 4) {
+            phase.aciertos++;
+          }
+        }
+      }
+    }
+  });
+
+  return phases;
+}
+
 const normalizeTeamName = (name) => {
   if (!name) return "";
   let n = name.trim().toLowerCase()
@@ -1256,6 +1427,9 @@ export default function App() {
     time_elapsed: dbMatch.is_finished ? "finished" : "notstarted"
   }));
 
+  const realResolved = resolveRealResults(mergedMatches);
+  const myPredsResolved = resolvePredictions(preds, mergedMatches);
+
   const hasKnockoutMatches = matches.some(m => m.id === 73);
 
   const getQuickMatches = () => {
@@ -1688,7 +1862,7 @@ export default function App() {
                     <option value="pending">⏳ Pendientes</option>
                     <option value="locked">🔒 Enviados</option>
                     <option value="finished">✅ Finalizados</option>
-                  </select>
+              </select>
                 </div>
 
                 <GF gs={GS} sel={grp} set={setGrp}/>
@@ -1698,18 +1872,12 @@ export default function App() {
                     let pts=null; 
                     let isExact = false;
                     let isWinner = false;
+                    
+                    const breakdown = getMatchPointsBreakdownObject(match.id, myPredsResolved, realResolved);
                     if ((finished || isLive) && pred) {
-                      if (pred.pred_home !== null && pred.pred_away !== null && match.score_home !== null && match.score_away !== null) {
-                        if (pred.pred_home === match.score_home && pred.pred_away === match.score_away) {
-                          pts = 6;
-                          isExact = true;
-                        } else {
-                          const pSide = pred.pred_home > pred.pred_away ? "H" : (pred.pred_home < pred.pred_away ? "A" : "D");
-                          const rSide = match.score_home > match.score_away ? "H" : (match.score_home < match.score_away ? "A" : "D");
-                          pts = pSide === rSide ? (pSide === "D" ? 1 : 3) : 0;
-                          isWinner = pSide === rSide;
-                        }
-                      }
+                      pts = breakdown.total;
+                      isExact = pts === 5;
+                      isWinner = pts === 3;
                     }
                     
                     let matchCardClass = "match-card";
@@ -1769,6 +1937,23 @@ export default function App() {
                           </div>
                         </div>
                         {(finished || isLive) && <div className="real-score-row">Resultado {isLive ? "parcial" : "real"}: <span className="real-score-accent text-bebas" style={{color: isLive ? "var(--green)" : "var(--accent)"}}>{match.score_home} - {match.score_away}</span></div>}
+                        {(finished || isLive) && pts !== null && (
+                          <div className="match-card-breakdown">
+                            <div className="match-card-breakdown-row">
+                              <span>Cálculo de puntos:</span>
+                              <span className="match-card-breakdown-formula">
+                                {breakdown.text}
+                              </span>
+                            </div>
+                            {breakdown.details && breakdown.details.length > 0 && (
+                              <div className="match-card-breakdown-details">
+                                {breakdown.details.map((detailStr, idx) => (
+                                  <span key={idx}>• {detailStr}</span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
                         {!locked&&draft.home!==undefined&&draft.home!==""&&draft.away!==undefined&&draft.away!==""&&(
                           <div className="match-card-actions">
                             <button onClick={()=>submitOne(match.id)} className="btn-success btn-sm-action">Enviar 🔒</button>
@@ -1974,8 +2159,6 @@ export default function App() {
               let aciertos = stats.ac;
               
               const selectedPartResolved = resolvePredictions(partPreds, mergedMatches);
-              const realResolved = resolveRealResults(mergedMatches);
-              const myPredsResolved = resolvePredictions(preds, mergedMatches);
               
               return(
                 <div className="participant-dashboard fade-in">
@@ -1995,6 +2178,43 @@ export default function App() {
                     <div className="summary-dashboard-item">
                       <div className="dashboard-val text-bebas">{partPreds.length}</div>
                       <div className="dashboard-lbl">PREDICCIONES</div>
+                    </div>
+                  </div>
+
+                  {/* Desglose de puntos por fase */}
+                  <div className="glass-card phase-breakdown-card" style={{ marginTop: "20px", marginBottom: "24px" }}>
+                    <h4 className="text-bebas" style={{ margin: "0 0 16px 0", color: "var(--accent)", display: "flex", alignItems: "center", gap: "8px", fontSize: "18px", letterSpacing: "1px" }}>
+                      <span>📊</span> DESGLOSE DE PUNTOS POR FASE
+                    </h4>
+                    <div className="table-wrapper">
+                      <table className="custom-table" style={{ fontSize: "13px" }}>
+                        <thead>
+                          <tr>
+                            <th style={{ textAlign: "left", width: "40%" }}>Fase (Multiplicador)</th>
+                            <th style={{ textAlign: "center" }}>Aciertos (3-4 pts base)</th>
+                            <th style={{ textAlign: "center" }}>Exactos (5-6 pts base)</th>
+                            <th style={{ textAlign: "right", color: "var(--accent)" }}>Puntos</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {getDetailedPhaseBreakdown(selectedPart.id, allPreds, mergedMatches, realResolved).map((phase, idx) => (
+                            <tr key={idx}>
+                              <td style={{ fontWeight: 600 }}>
+                                {phase.name} <span style={{ color: "var(--text-dim)", fontSize: "11px", fontWeight: "normal" }}>({phase.mult === 1 ? "x1" : `x${phase.mult}`})</span>
+                              </td>
+                              <td className="text-center" style={{ color: phase.aciertos > 0 ? "var(--blue)" : "var(--text-muted)", fontWeight: "bold" }}>
+                                {phase.aciertos}
+                              </td>
+                              <td className="text-center" style={{ color: phase.exacts > 0 ? "var(--green)" : "var(--text-muted)", fontWeight: "bold" }}>
+                                {phase.exacts}
+                              </td>
+                              <td className="text-right text-bebas" style={{ color: phase.pts > 0 ? "var(--accent)" : "var(--text-dim)", fontSize: "16px", fontWeight: 700 }}>
+                                {phase.pts}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
                   
@@ -2138,45 +2358,13 @@ export default function App() {
                           let isWinner = false;
                           let wasDemoted = false;
                           
+                          const breakdown = getMatchPointsBreakdownObject(match.id, selectedPartResolved, realResolved);
+                          
                           if ((finished || isLive) && pResS && pResS.score_home !== null && pResS.score_away !== null && rRes && rRes.score_home !== null && rRes.score_away !== null) {
-                            pts = getMatchPointsUnified(match.id, selectedPartResolved, realResolved);
-                            
-                            if (match.id <= 72) {
-                              isExact = pts === 5;
-                              isWinner = pts === 3;
-                            } else {
-                              const isWinnerCorrect = (pResS.winner === rRes.winner && rRes.winner !== null);
-                              if (isWinnerCorrect) {
-                                const isMatchupCorrect = (pResS.home === rRes.home && pResS.away === rRes.away) || (pResS.home === rRes.away && pResS.away === rRes.home);
-                                if (isMatchupCorrect) {
-                                  if (pResS.home === rRes.home) {
-                                    isExact = (pResS.score_home === rRes.score_home && pResS.score_away === rRes.score_away);
-                                  } else {
-                                    isExact = (pResS.score_home === rRes.score_away && pResS.score_away === rRes.score_home);
-                                  }
-                                }
-                                
-                                let hasAncestorError = false;
-                                if (isExact) {
-                                  const ancestors = getAncestors(match.id);
-                                  for (const aId of ancestors) {
-                                    const pAnc = selectedPartResolved[aId];
-                                    const rAnc = realResolved[aId];
-                                    if (!pAnc || !rAnc) { hasAncestorError = true; break; }
-                                    const isAncMatchupCorrect = (pAnc.home === rAnc.home && pAnc.away === rAnc.away) || (pAnc.home === rAnc.away && pAnc.away === rAnc.home);
-                                    if (!isAncMatchupCorrect) { hasAncestorError = true; break; }
-                                  }
-                                }
-                                
-                                if (isExact && hasAncestorError) {
-                                  isExact = false;
-                                  isWinner = true;
-                                  wasDemoted = true;
-                                } else {
-                                  isWinner = !isExact;
-                                }
-                              }
-                            }
+                            pts = breakdown.total;
+                            isExact = breakdown.isExact;
+                            isWinner = breakdown.isWinner;
+                            wasDemoted = breakdown.wasDemoted;
                           }
                           
                           let matchCardClass = "match-card";
@@ -2232,7 +2420,52 @@ export default function App() {
                                   <span className="team-name">{match.id <= 72 ? match.team_away : pResS.away}</span>
                                 </div>
                               </div>
-                              {(finished || isLive) && <div className="real-score-row">Resultado {isLive ? "parcial" : "real"}: <span className="real-score-accent text-bebas" style={{color: isLive ? "var(--green)" : "var(--accent)"}}>{rRes ? rRes.score_home : match.score_home} - {rRes ? rRes.score_away : match.score_away}</span></div>}
+                              {(finished || isLive) && (() => {
+                                const realHome = match.id <= 72 ? match.team_home : (rRes ? rRes.home : match.team_home);
+                                const realAway = match.id <= 72 ? match.team_away : (rRes ? rRes.away : match.team_away);
+                                const realScoreHome = rRes ? rRes.score_home : match.score_home;
+                                const realScoreAway = rRes ? rRes.score_away : match.score_away;
+                                const hasDifferentMatchup = match.id >= 73 && rRes && pResS && (pResS.home !== rRes.home || pResS.away !== rRes.away);
+                                
+                                return (
+                                  <div className="real-score-row" style={{ display: "flex", flexDirection: "column", gap: "6px", alignItems: "center", justifyContent: "center", padding: "10px 8px" }}>
+                                    <div style={{ fontSize: "11px", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                                      Resultado {isLive ? "parcial" : "real"}:
+                                    </div>
+                                    <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", justifyContent: "center" }}>
+                                      <span className="flag-emoji" style={{ fontSize: "14px" }}>{gf(realHome)}</span>
+                                      <span style={{ color: "var(--text)", fontWeight: "bold", fontSize: "13px" }}>{realHome}</span>
+                                      <span className="real-score-accent text-bebas" style={{ color: isLive ? "var(--green)" : "var(--accent)", margin: "0 6px", fontSize: "18px" }}>
+                                        {realScoreHome} - {realScoreAway}
+                                      </span>
+                                      <span style={{ color: "var(--text)", fontWeight: "bold", fontSize: "13px" }}>{realAway}</span>
+                                      <span className="flag-emoji" style={{ fontSize: "14px" }}>{gf(realAway)}</span>
+                                    </div>
+                                    {hasDifferentMatchup && (
+                                      <div style={{ fontSize: "11px", color: "var(--pink)", fontWeight: "600", marginTop: "2px", borderTop: "1px dashed rgba(235, 94, 85, 0.2)", width: "100%", paddingTop: "4px", textAlign: "center" }}>
+                                        ⚠️ Rival incorrecto en tu bracket ({pResS.home} vs {pResS.away})
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })()}
+                              {(finished || isLive) && pts !== null && (
+                                <div className="match-card-breakdown">
+                                  <div className="match-card-breakdown-row">
+                                    <span>Cálculo de puntos:</span>
+                                    <span className="match-card-breakdown-formula">
+                                      {breakdown.text}
+                                    </span>
+                                  </div>
+                                  {breakdown.details && breakdown.details.length > 0 && (
+                                    <div className="match-card-breakdown-details">
+                                      {breakdown.details.map((detailStr, idx) => (
+                                        <span key={idx}>• {detailStr}</span>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           );
                         })}
@@ -2598,30 +2831,11 @@ export default function App() {
                 let wasDemoted = false;
 
                 if (r && r.is_finished) {
-                  pts = getMatchPointsUnified(m.id, userBracket, realResolved);
-                  if (m.score_home !== null && m.score_away !== null && r.score_home !== null && r.score_away !== null) {
-                    const isWinnerCorrect = (m.winner === r.winner && r.winner !== null);
-                    if (isWinnerCorrect) {
-                      const isMatchupCorrect = (m.home === r.home && m.away === r.away) || (m.home === r.away && m.away === r.home);
-                      if (isMatchupCorrect) {
-                        if (m.home === r.home) {
-                          isExact = (m.score_home === r.score_home && m.score_away === r.score_away);
-                        } else {
-                          isExact = (m.score_home === r.score_away && m.score_away === r.score_home);
-                        }
-                        
-                        if (isExact && hasAncestorError) {
-                          isExact = false;
-                          isWinner = true;
-                          wasDemoted = true;
-                        } else {
-                          isWinner = !isExact;
-                        }
-                      } else {
-                        isWinner = true;
-                      }
-                    }
-                  }
+                  const breakdown = getMatchPointsBreakdownObject(m.id, userBracket, realResolved);
+                  pts = breakdown.total;
+                  isExact = breakdown.isExact;
+                  isWinner = breakdown.isWinner;
+                  wasDemoted = breakdown.wasDemoted;
                 }
                 
                 return (
@@ -2849,6 +3063,46 @@ export default function App() {
                       </div>
                     </div>
                   )}
+
+                  {/* Desglose de puntos por fase del usuario actual */}
+                  {user && (
+                    <div className="glass-card phase-breakdown-card" style={{ marginTop: "20px", marginBottom: "24px" }}>
+                      <h4 className="text-bebas" style={{ margin: "0 0 16px 0", color: "var(--accent)", display: "flex", alignItems: "center", gap: "8px", fontSize: "18px", letterSpacing: "1px" }}>
+                        <span>📊</span> TU DESGLOSE DE PUNTOS POR FASE
+                      </h4>
+                      <div className="table-wrapper">
+                        <table className="custom-table" style={{ fontSize: "13px" }}>
+                          <thead>
+                            <tr>
+                              <th style={{ textAlign: "left", width: "40%" }}>Fase (Multiplicador)</th>
+                              <th style={{ textAlign: "center" }}>Aciertos (3-4 pts base)</th>
+                              <th style={{ textAlign: "center" }}>Exactos (5-6 pts base)</th>
+                              <th style={{ textAlign: "right", color: "var(--accent)" }}>Puntos</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {getDetailedPhaseBreakdown(user.id, allPreds, mergedMatches, realResolved).map((phase, idx) => (
+                              <tr key={idx}>
+                                <td style={{ fontWeight: 600 }}>
+                                  {phase.name} <span style={{ color: "var(--text-dim)", fontSize: "11px", fontWeight: "normal" }}>({phase.mult === 1 ? "x1" : `x${phase.mult}`})</span>
+                                </td>
+                                <td className="text-center" style={{ color: phase.aciertos > 0 ? "var(--blue)" : "var(--text-muted)", fontWeight: "bold" }}>
+                                  {phase.aciertos}
+                                </td>
+                                <td className="text-center" style={{ color: phase.exacts > 0 ? "var(--green)" : "var(--text-muted)", fontWeight: "bold" }}>
+                                  {phase.exacts}
+                                </td>
+                                <td className="text-right text-bebas" style={{ color: phase.pts > 0 ? "var(--accent)" : "var(--text-dim)", fontSize: "16px", fontWeight: 700 }}>
+                                  {phase.pts}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
                   {!hasMatches && (
                     <div className="glass-card" style={{ marginBottom: "24px", border: "1px dashed var(--pink)", padding: "16px 20px" }}>
                       <h4 style={{ margin: "0 0 6px 0", color: "var(--pink)", display: "flex", alignItems: "center", gap: "8px", fontSize: "14px" }} className="text-bebas">
