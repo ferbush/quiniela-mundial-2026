@@ -890,6 +890,139 @@ export default function App() {
 
   const [adminSearch, setAdminSearch] = useState("");
   const [adminStatus, setAdminStatus] = useState("pending");
+  const [simResults, setSimResults] = useState(null);
+  const [simLoading, setSimLoading] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const runMonteCarloSim = () => {
+    setSimLoading(true);
+    setTimeout(() => {
+      try {
+        const iterations = 5000;
+        const winCounts = {};
+        const pointsSum = {};
+        const maxPoints = {};
+        const minPoints = {};
+        
+        parts.forEach(p => {
+          winCounts[p.id] = 0;
+          pointsSum[p.id] = 0;
+          maxPoints[p.id] = -Infinity;
+          minPoints[p.id] = Infinity;
+        });
+
+        const pendingIds = [95, 96, 97, 98, 99, 100, 101, 102, 103, 104];
+        
+        const getRandomOutcome = () => {
+          const rand = Math.random();
+          if (rand < 0.15) return { h: 1, a: 0, w: 'home' };
+          if (rand < 0.30) return { h: 2, a: 1, w: 'home' };
+          if (rand < 0.42) return { h: 2, a: 0, w: 'home' };
+          if (rand < 0.57) return { h: 0, a: 1, w: 'away' };
+          if (rand < 0.72) return { h: 1, a: 2, w: 'away' };
+          if (rand < 0.80) return { h: 0, a: 2, w: 'away' };
+          if (rand < 0.88) return { h: 1, a: 1, w: Math.random() < 0.5 ? 'home' : 'away' };
+          if (rand < 0.94) return { h: 2, a: 2, w: Math.random() < 0.5 ? 'home' : 'away' };
+          if (rand < 0.98) return { h: 0, a: 0, w: Math.random() < 0.5 ? 'home' : 'away' };
+          return { h: 3, a: 1, w: 'home' };
+        };
+
+        const userPredsMap = {};
+        parts.forEach(p => {
+          userPredsMap[p.id] = allPreds.filter(pr => pr.participant_id === p.id);
+        });
+
+        for (let iter = 0; iter < iterations; iter++) {
+          const simMatches = matches.map(m => ({ ...m }));
+          
+          pendingIds.forEach(id => {
+            const m = simMatches.find(x => x.id === id);
+            if (!m) return;
+            const parents = matchParents[id];
+            if (parents) {
+              const p1 = simMatches.find(x => x.id === parents[0]);
+              const p2 = simMatches.find(x => x.id === parents[1]);
+              if (id === 103) {
+                const p1Winner = getRealWinnerTeam(p1, simMatches);
+                m.team_home = p1Winner === p1.team_home ? p1.team_away : p1.team_home;
+                const p2Winner = getRealWinnerTeam(p2, simMatches);
+                m.team_away = p2Winner === p2.team_home ? p2.team_away : p2.team_home;
+              } else {
+                m.team_home = getRealWinnerTeam(p1, simMatches);
+                m.team_away = getRealWinnerTeam(p2, simMatches);
+              }
+            }
+            
+            const outcome = getRandomOutcome();
+            m.score_home = outcome.h;
+            m.score_away = outcome.a;
+            m.is_finished = true;
+          });
+
+          const realResolved = resolveRealResults(simMatches);
+          
+          let maxPts = -1;
+          let winners = [];
+
+          parts.forEach(p => {
+            const userPreds = userPredsMap[p.id];
+            const predResolved = resolvePredictions(userPreds, simMatches);
+            
+            let pts = 0;
+            simMatches.forEach(m => {
+              if (m.is_finished) {
+                pts += getMatchPointsUnified(m.id, predResolved, realResolved);
+              }
+            });
+
+            pointsSum[p.id] += pts;
+            if (pts > maxPoints[p.id]) maxPoints[p.id] = pts;
+            if (pts < minPoints[p.id]) minPoints[p.id] = pts;
+
+            if (pts > maxPts) {
+              maxPts = pts;
+              winners = [p.id];
+            } else if (pts === maxPts) {
+              winners.push(p.id);
+            }
+          });
+
+          winners.forEach(wId => {
+            winCounts[wId] += 1 / winners.length;
+          });
+        }
+
+        const calculated = parts.map(p => ({
+          id: p.id,
+          name: p.name,
+          winRate: (winCounts[p.id] / iterations) * 100,
+          avgPoints: pointsSum[p.id] / iterations,
+          maxPts: maxPoints[p.id],
+          minPts: minPoints[p.id]
+        })).sort((a, b) => b.winRate - a.winRate || b.avgPoints - a.avgPoints);
+
+        setSimResults(calculated);
+      } catch (error) {
+        console.error("Simulation error:", error);
+      } finally {
+        setSimLoading(false);
+      }
+    }, 50);
+  };
+
+  const handleCopyReport = () => {
+    if (!simResults) return;
+    const lines = [
+      "📊 *PROBABILIDADES DE GANAR LA QUINIELA (MONTE CARLO)*",
+      "Simulación de los 10 partidos restantes (5,000 corridas):\n",
+      ...simResults.map((r, idx) => `${idx + 1}. *${r.name}*: ${r.winRate.toFixed(2)}% | Prom: ${r.avgPoints.toFixed(1)} pts | Rango: [${r.minPts} - ${r.maxPts}]`),
+      "\nCalculado en tiempo real desde el Panel de Admin 🏆"
+    ];
+    const text = lines.join("\n");
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   const getBracketR32TeamMap = (source) => {
     const standingsFn = source === "real" ? getGroupStandings : getGroupStandingsPred;
@@ -3364,6 +3497,79 @@ export default function App() {
                   );
                 })}
               </div>
+            </div>
+
+            {/* SIMULADOR DE PROBABILIDADES */}
+            <div className="glass-card admin-summary-card" style={{ marginBottom: 24 }}>
+              <style>{`
+                @keyframes spin {
+                  0% { transform: rotate(0deg); }
+                  100% { transform: rotate(360deg); }
+                }
+              `}</style>
+              <h4 className="admin-subtitle text-bebas">🎲 SIMULACIÓN DE PROBABILIDADES (MONTE CARLO)</h4>
+              <p style={{ fontSize: "13px", color: "var(--text-dim)", marginBottom: 16 }}>
+                Simula los 10 partidos restantes 5,000 veces usando probabilidades de marcadores reales para estimar las chances de ganar la quiniela de cada participante.
+              </p>
+              
+              <div style={{ display: "flex", gap: "12px", marginBottom: 16 }}>
+                <button 
+                  onClick={runMonteCarloSim} 
+                  className="btn-success" 
+                  style={{ flex: 1, padding: "12px", fontSize: "14px", fontWeight: "bold", display: "flex", justifyContent: "center", alignItems: "center", gap: "8px" }}
+                  disabled={simLoading}
+                >
+                  {simLoading ? (
+                    <>
+                      <span style={{ display: "inline-block", width: "16px", height: "16px", border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "#fff", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
+                      Simulando torneo...
+                    </>
+                  ) : (
+                    <>📊 Ejecutar Simulación</>
+                  )}
+                </button>
+
+                {simResults && (
+                  <button 
+                    onClick={handleCopyReport} 
+                    className="btn-secondary" 
+                    style={{ padding: "12px 18px", fontSize: "14px", fontWeight: "bold", display: "flex", alignItems: "center", gap: "8px", border: "1px solid var(--border)" }}
+                  >
+                    {copied ? "✅ ¡Copiado!" : "📋 Compartir"}
+                  </button>
+                )}
+              </div>
+
+              {simResults && (
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px", color: "var(--text)" }}>
+                    <thead>
+                      <tr style={{ borderBottom: "1px solid var(--border)", textAlign: "left" }}>
+                        <th style={{ padding: "8px", color: "var(--accent)" }}>Pos</th>
+                        <th style={{ padding: "8px", color: "var(--accent)" }}>Participante</th>
+                        <th style={{ padding: "8px", color: "var(--accent)", textAlign: "right" }}>Prob. de Ganar</th>
+                        <th style={{ padding: "8px", color: "var(--accent)", textAlign: "right" }}>Puntos Promedio</th>
+                        <th style={{ padding: "8px", color: "var(--accent)", textAlign: "right" }}>Rango [Min-Max]</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {simResults.map((r, idx) => (
+                        <tr key={r.id} style={{ borderBottom: "1px solid rgba(255,255,255,0.05)", background: idx === 0 ? "rgba(235, 172, 60, 0.05)" : "transparent" }}>
+                          <td style={{ padding: "8px", fontWeight: "bold" }}>#{idx + 1}</td>
+                          <td style={{ padding: "8px" }}>
+                            {r.name} {idx === 0 && "🏆"}
+                          </td>
+                          <td style={{ padding: "8px", textAlign: "right", fontWeight: "bold", color: r.winRate > 50 ? "#4ade80" : r.winRate > 10 ? "#fbbf24" : r.winRate > 0 ? "#f87171" : "var(--text-dim)" }}>
+                            {r.winRate.toFixed(2)}%
+                          </td>
+                          <td style={{ padding: "8px", textAlign: "right" }}>{r.avgPoints.toFixed(1)} pts</td>
+                          <td style={{ padding: "8px", textAlign: "right", color: "var(--text-dim)" }}>{r.minPts} - {r.maxPts}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
 
             <div className="search-filter-bar">
