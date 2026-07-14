@@ -435,18 +435,7 @@ function getMatchPointsUnified(matchId, predResolved, realResolved) {
         isScoreExact = (p.score_home === r.score_away && p.score_away === r.score_home);
       }
       if (isScoreExact) {
-        let hasAncestorError = false;
-        const ancestors = getAncestors(matchId);
-        for (const aId of ancestors) {
-          const pAnc = predResolved[aId];
-          const rAnc = realResolved[aId];
-          if (!pAnc || !rAnc) { hasAncestorError = true; break; }
-          const isAncMatchupCorrect = (pAnc.home === rAnc.home && pAnc.away === rAnc.away) || (pAnc.home === rAnc.away && pAnc.away === rAnc.home);
-          if (!isAncMatchupCorrect) { hasAncestorError = true; break; }
-        }
-        if (!hasAncestorError) {
-          basePoints += 2;
-        }
+        basePoints += 2;
       }
     }
     
@@ -497,18 +486,7 @@ function getParticipantStats(participantId, allPreds, matchesList) {
               isScoreExact = (p.score_home === r.score_away && p.score_away === r.score_home);
             }
           }
-          let hasAncestorError = false;
           if (isScoreExact) {
-            const ancestors = getAncestors(m.id);
-            for (const aId of ancestors) {
-              const pAnc = predResolved[aId];
-              const rAnc = realResolved[aId];
-              if (!pAnc || !rAnc) { hasAncestorError = true; break; }
-              const isAncMatchupCorrect = (pAnc.home === rAnc.home && pAnc.away === rAnc.away) || (pAnc.home === rAnc.away && pAnc.away === rAnc.home);
-              if (!isAncMatchupCorrect) { hasAncestorError = true; break; }
-            }
-          }
-          if (isScoreExact && !hasAncestorError) {
             ex++;
           } else if (isWinnerCorrect || isDrawCorrect) {
             ac++;
@@ -589,7 +567,6 @@ function getMatchPointsBreakdownObject(matchId, predResolved, realResolved) {
     
     const isMatchupCorrect = (p.home === r.home && p.away === r.away) || (p.home === r.away && p.away === r.home);
     let isScoreExact = false;
-    let hasAncestorError = false;
     let isRealDraw = false;
     let isPredDraw = false;
     
@@ -604,29 +581,16 @@ function getMatchPointsBreakdownObject(matchId, predResolved, realResolved) {
       if (p.home === r.home) {
         isScoreExact = (p.score_home === r.score_home && p.score_away === r.score_away);
       } else {
-        isScoreExact = (p.score_home === r.away && p.score_away === r.home);
+        isScoreExact = (p.score_home === r.score_away && p.score_away === r.score_home);
       }
       if (isScoreExact) {
-        const ancestors = getAncestors(matchId);
-        for (const aId of ancestors) {
-          const pAnc = predResolved[aId];
-          const rAnc = realResolved[aId];
-          if (!pAnc || !rAnc) { hasAncestorError = true; break; }
-          const isAncMatchupCorrect = (pAnc.home === rAnc.home && pAnc.away === rAnc.away) || (pAnc.home === rAnc.away && pAnc.away === rAnc.home);
-          if (!isAncMatchupCorrect) { hasAncestorError = true; break; }
-        }
-        
-        if (!hasAncestorError) {
-          basePoints += 2;
-          details.push("2 pts (Marcador exacto)");
-        } else {
-          details.push("0 pts (Marcador exacto demotado - rival previo incorrecto)");
-        }
+        basePoints += 2;
+        details.push("2 pts (Marcador exacto)");
       }
     } else {
       isRealDraw = (r.score_home === r.score_away);
       isPredDraw = (p.score_home === p.score_away);
-      const isExactNumbers = (p.score_home === r.score_home && p.score_away === r.score_away) || (p.score_home === r.score_away && p.score_away === r.home);
+      const isExactNumbers = (p.score_home === r.score_home && p.score_away === r.score_away) || (p.score_home === r.score_away && p.score_away === r.score_home);
       if (isExactNumbers) {
         details.push("0 pts (Marcador exacto anulado - rival incorrecto: " + p.home + " vs " + p.away + " en vez de " + r.home + " vs " + r.away + ")");
       } else if (isRealDraw && isPredDraw) {
@@ -645,7 +609,7 @@ function getMatchPointsBreakdownObject(matchId, predResolved, realResolved) {
       text = mult > 1 ? `(${baseStr}) * x${mult} = ${total} pts` : `${baseStr} = ${total} pts`;
     }
     
-    const isEx = isScoreExact && !hasAncestorError;
+    const isEx = isScoreExact;
     const isWin = basePoints > 0 && !isEx;
     
     return {
@@ -656,7 +620,7 @@ function getMatchPointsBreakdownObject(matchId, predResolved, realResolved) {
       basePoints,
       isExact: isEx,
       isWinner: isWin,
-      wasDemoted: isScoreExact && hasAncestorError
+      wasDemoted: false
     };
   }
 }
@@ -2624,23 +2588,10 @@ export default function App() {
                         const isHomeWinner = m.winner === m.home && m.winner !== null;
                         const isAwayWinner = m.winner === m.away && m.winner !== null;
                         
-                        let hasAncestorError = false;
-                        if (r && r.is_finished) {
-                          const ancestors = getAncestors(m.id);
-                          for (const aId of ancestors) {
-                            const pAnc = partBracket[aId];
-                            const rAnc = realResolved[aId];
-                            if (!pAnc || !rAnc) { hasAncestorError = true; break; }
-                            const isAncMatchupCorrect = (pAnc.home === rAnc.home && pAnc.away === rAnc.away) || (pAnc.home === rAnc.away && pAnc.away === rAnc.home);
-                            if (!isAncMatchupCorrect) { hasAncestorError = true; break; }
-                          }
-                        }
-                        
                         return (
                           <div key={m.id} className={`bracket-match-card ${m.winner ? "has-winner" : ""}`} style={{ minHeight: isTie ? "130px" : "110px", height: "auto" }}>
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", height: "14px" }}>
                               <span className="bracket-match-num">Match #{m.id}</span>
-                              {hasAncestorError && <span className="badge badge-warning" style={{ fontSize: "8.5px", padding: "1px 4px" }} title="Rival diferente en ronda previa. No sumará exacto.">⚠️ Rival diff</span>}
                             </div>
                             
                             <div className="bracket-match-teams">
@@ -2952,29 +2903,15 @@ export default function App() {
                 const isHomeWinner = m.winner === m.home && m.winner !== null;
                 const isAwayWinner = m.winner === m.away && m.winner !== null;
                 
-                let hasAncestorError = false;
-                if (r && r.is_finished) {
-                  const ancestors = getAncestors(m.id);
-                  for (const aId of ancestors) {
-                    const pAnc = userBracket[aId];
-                    const rAnc = realResolved[aId];
-                    if (!pAnc || !rAnc) { hasAncestorError = true; break; }
-                    const isAncMatchupCorrect = (pAnc.home === rAnc.home && pAnc.away === rAnc.away) || (pAnc.home === rAnc.away && pAnc.away === rAnc.home);
-                    if (!isAncMatchupCorrect) { hasAncestorError = true; break; }
-                  }
-                }
-
                 let pts = 0;
                 let isExact = false;
                 let isWinner = false;
-                let wasDemoted = false;
 
                 if (r && r.is_finished) {
                   const breakdown = getMatchPointsBreakdownObject(m.id, userBracket, realResolved);
                   pts = breakdown.total;
                   isExact = breakdown.isExact;
                   isWinner = breakdown.isWinner;
-                  wasDemoted = breakdown.wasDemoted;
                 }
                 
                 return (
@@ -2982,10 +2919,9 @@ export default function App() {
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", height: "14px" }}>
                       <span className="bracket-match-num">Match #{m.id}</span>
                       <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
-                        {hasAncestorError && <span className="badge badge-warning" style={{ fontSize: "8.5px", padding: "1px 4px" }} title="Rival diferente en ronda previa. No sumará exacto.">⚠️ Rival diff</span>}
                         {r && r.is_finished && (
                           <span className={`badge ${isExact ? 'badge-success' : isWinner ? 'badge-info' : 'badge-danger'} badge-pts-earned`} style={{ fontSize: "8.5px", padding: "1px 4px" }}>
-                            {isExact ? `🎯 +${pts}` : isWinner ? (wasDemoted ? `✓ +${pts} (⚠️ Rival diff)` : `✓ +${pts}`) : "✗ 0"}
+                            {isExact ? `🎯 +${pts}` : isWinner ? `✓ +${pts}` : "✗ 0"}
                           </span>
                         )}
                       </div>
